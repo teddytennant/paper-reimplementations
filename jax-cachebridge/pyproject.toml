@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "jax-cachebridge"
+version = "0.1.0"
+description = "JAX implementation of CacheBridge cross-model KV cache transfer (arXiv:2609.00891)"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Teddy Tennant", email = "teddytennant@icloud.com" }]
+requires-python = ">=3.10"
+dependencies = ["jax>=0.4.30"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["cachebridge"]
