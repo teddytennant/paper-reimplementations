@@ -171,7 +171,15 @@ def test_construction_climbs_and_stays_local(built):
 
 def test_the_device_neighbourhood_agrees_with_the_reference(scaled_task):
     """``construct_trajectories`` runs Eq. (22) on device; it has to pick the same
-    designs as the numpy reference."""
+    neighborhood as the numpy reference.
+
+    The comparison is by distance, not by index. Two designs sitting the same
+    distance from x_k are both correct answers for the last slot of S_k, and the
+    two paths break that tie with different code. What is not allowed is picking
+    a design that is measurably further out, which is how the TF32 matmul this
+    used to run showed up: on an H200 it put the 11th nearest design in the
+    neighborhood ahead of the 10th, 0.019 closer.
+    """
     import jax.numpy as jnp
 
     from ugtl.trajectory import _nearest_feasible
@@ -187,11 +195,23 @@ def test_the_device_neighbourhood_agrees_with_the_reference(scaled_task):
     picked, valid, has_feasible = _nearest_feasible(
         jnp.asarray(X), jnp.asarray(y), jnp.asarray(cur), jnp.asarray(visited), jnp.asarray(best), K, XI
     )
+    picked, valid = np.asarray(picked), np.asarray(valid)
     dist2 = ((X[cur][:, None, :] - X[None, :, :]) ** 2).sum(-1)
     ref_picked, ref_valid, ref_fallback = score_feasible_neighbourhood(dist2, ~visited, y, best, XI, K)
 
+    # Judge both selections against float64 distances so the tolerance below is
+    # about the tie, not about how either path rounded.
+    X64 = X.astype(np.float64)
+    exact = ((X64[cur][:, None, :] - X64[None, :, :]) ** 2).sum(-1)
+
     assert np.array_equal(np.asarray(has_feasible), ~ref_fallback)
     for u in range(m):
-        assert np.array_equal(np.asarray(valid)[u], ref_valid[u])
-        got = np.asarray(picked)[u][np.asarray(valid)[u]]
-        assert set(got.tolist()) == set(ref_picked[u][ref_valid[u]].tolist())
+        assert np.array_equal(valid[u], ref_valid[u])
+        got = picked[u][valid[u]]
+        assert len(set(got.tolist())) == len(got)
+        assert (~visited[u][got]).all()
+        assert (y[got] >= best[u] - XI).all()
+        # Same K distances as the true K nearest, so any index that differs from
+        # the reference is a tie and not a worse pick.
+        want = ref_picked[u][ref_valid[u]]
+        assert np.allclose(np.sort(exact[u, got]), np.sort(exact[u, want]), rtol=0, atol=1e-6)

@@ -22,3 +22,12 @@ random-construction ablation, paths hundreds of times smoother by the
 second-difference measure, but its candidates do not beat that ablation's; on a
 2D task the proxy screen in Algorithm 6 is accurate enough to hide the
 difference.
+
+## tests
+
+    pytest
+
+The suite passes on CPU and on an H200. Distances in Algorithm 5 are computed as
+plain differences rather than through the Gram identity, because a float32
+matmul runs at TF32 on an NVIDIA GPU and that is enough error to reorder a
+nearest-neighbour set.

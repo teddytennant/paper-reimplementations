@@ -110,12 +110,12 @@ def score_feasible_neighbourhood(dist2, unvisited, y, best, xi, K):
     fire. The fallback keeps the K highest-scoring unvisited designs, breaking
     score ties by distance to x_k.
     """
-    m, N = dist2.shape
     feasible = unvisited & (y[None, :] >= (best - xi)[:, None])
     masked = np.where(feasible, dist2, np.inf)
-    part = np.argpartition(masked, min(K, N - 1), axis=1)[:, :K]
-    d = np.take_along_axis(masked, part, axis=1)
-    picked = np.take_along_axis(part, np.argsort(d, axis=1, kind="stable"), axis=1)
+    # A full stable argsort rather than argpartition: equal distances then go to
+    # the lower index, which is what jax.lax.top_k does in _nearest_feasible.
+    # argpartition leaves ties in whatever order it happened to produce.
+    picked = np.argsort(masked, axis=1, kind="stable")[:, :K]
     valid = np.isfinite(np.take_along_axis(masked, picked, axis=1))
     fallback = ~feasible.any(axis=1)
     for u in np.flatnonzero(fallback):
@@ -138,12 +138,23 @@ def _start_indices(rng, y, p_init, n_traj):
 def _nearest_feasible(X, y, cur, visited, best, K, xi):
     """The device version of Eq. (22): the K nearest unvisited designs scoring at
     least b_k - xi. ``score_feasible_neighbourhood`` is the readable reference
-    and the tests hold the two to the same answer."""
-    xc = X[cur]
-    sq = (X**2).sum(axis=1)
-    d2 = jnp.maximum(sq[cur][:, None] + sq[None, :] - 2.0 * (xc @ X.T), 0.0)
+    and the tests hold the two to the same answer.
+
+    The distances are the plain squared differences, not the ||a||^2 + ||b||^2 -
+    2 a.b identity. The identity is cheaper in memory, (m, N) instead of
+    (m, N, d), but it routes the distance through a float32 matmul, and XLA runs
+    those on tensor cores at TF32 by default on an NVIDIA GPU. TF32 keeps 10
+    mantissa bits, so on the Branin data, where ||x||^2 reaches ~300, the
+    cancellation left errors up to 0.2 in a d2 whose 10th and 11th nearest
+    neighbours are 0.019 apart. That reorders the neighborhood. The subtraction
+    below is elementwise, never a matmul, so nothing downgrades it.
+    """
+    delta = X[cur][:, None, :] - X[None, :, :]
+    d2 = (delta * delta).sum(axis=-1)
     feasible = (~visited) & (y[None, :] >= (best - xi)[:, None])
     masked = jnp.where(feasible, d2, jnp.inf)
+    # top_k breaks ties by lowest index; score_feasible_neighbourhood sorts
+    # stably so it does the same.
     neg, picked = jax.lax.top_k(-masked, K)
     return picked, jnp.isfinite(neg), feasible.any(axis=1)
 
@@ -153,7 +164,9 @@ def _sample_next(key, X, cur, picked, valid, grads, kappa):
     """Eq. (24) on device. Same logits as ``transition_probs``, sampled with
     ``jax.random.categorical``."""
     delta = X[picked] - X[cur][:, None, :]
-    num = jnp.einsum("mkd,md->mk", delta, grads)
+    # Same reason as _nearest_feasible: an einsum lowers to a dot, and a float32
+    # dot is TF32 on GPU. delta and grads are small, so broadcast and sum.
+    num = (delta * grads[:, None, :]).sum(axis=-1)
     den = jnp.linalg.norm(grads, axis=-1)[:, None] * jnp.linalg.norm(delta, axis=-1) + C_COS
     logits = jnp.where(valid, (num / den) / kappa[:, None], -jnp.inf)
     slot = jax.random.categorical(key, logits)
