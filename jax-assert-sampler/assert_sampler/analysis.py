@@ -19,6 +19,17 @@ Every J_i e_i and H_i Delta theta here is one JVP, so nothing is materialized as
 a matrix. The cross terms are the point: they exist only because one Delta theta
 is reused across steps, and Equation 11 says stochastic sampling helps by making
 them less positive.
+
+Every trajectory and derivative in this module runs under
+jax.default_matmul_precision("highest"). XLA's GPU default for float32 matmuls
+is TF32 (10 mantissa bits), which is fine for training and sampling but not
+here: the finite differences below subtract two nearly-identical 20-step
+trajectories, and Equation 9's unrolled sum is an algebraic identity, both of
+which need the bits TF32 throws away. Measured on an H200, forcing "highest"
+brings GPU results back in line with CPU: the unrolled-sum residual drops from
+7e-4 relative (fails the 1e-4 check) to 5e-7, and the finite-difference tests
+go from diverging as h shrinks to matching CPU's convergence curve within a few
+percent at every h tested.
 """
 
 from __future__ import annotations
@@ -73,12 +84,13 @@ def reference_trajectory(key, params, sched, num_steps: int, etas: jnp.ndarray,
     step_fn = make_step_fn(sched, num_steps, etas, eps_fn, clip_x0)
     xs, zs = [x_init], []
     x = x_init
-    for i in range(num_steps):
-        key, sub = jax.random.split(key)
-        z = jax.random.normal(sub, x.shape)
-        zs.append(z)
-        x = step_fn(params, x, i, z)
-        xs.append(x)
+    with jax.default_matmul_precision("highest"):
+        for i in range(num_steps):
+            key, sub = jax.random.split(key)
+            z = jax.random.normal(sub, x.shape)
+            zs.append(z)
+            x = step_fn(params, x, i, z)
+            xs.append(x)
     return jnp.stack(xs), jnp.stack(zs), step_fn
 
 
@@ -122,8 +134,9 @@ def linearized_error(params, dtheta, xs, zs, step_fn,
     thetas = _per_step(dtheta, num_steps)
     jvp = _jitted_jvp(step_fn)
     e = jnp.zeros_like(xs[0])
-    for i in range(num_steps):
-        e = jvp(params, xs[i], i, zs[i], _scaled(thetas[i], active[i]), e)
+    with jax.default_matmul_precision("highest"):
+        for i in range(num_steps):
+            e = jvp(params, xs[i], i, zs[i], _scaled(thetas[i], active[i]), e)
     return e
 
 
@@ -137,12 +150,13 @@ def propagated_terms(params, dtheta, xs, zs, step_fn,
     jvp = _jitted_jvp(step_fn)
     zero = _zeros_like(thetas[0])
     us = []
-    for i in range(num_steps):
-        v = jvp(params, xs[i], i, zs[i], _scaled(thetas[i], active[i]),
-                jnp.zeros_like(xs[i]))
-        for j in range(i + 1, num_steps):
-            v = jvp(params, xs[j], j, zs[j], zero, v)
-        us.append(v)
+    with jax.default_matmul_precision("highest"):
+        for i in range(num_steps):
+            v = jvp(params, xs[i], i, zs[i], _scaled(thetas[i], active[i]),
+                    jnp.zeros_like(xs[i]))
+            for j in range(i + 1, num_steps):
+                v = jvp(params, xs[j], j, zs[j], zero, v)
+            us.append(v)
     return jnp.stack(us)
 
 
@@ -186,8 +200,9 @@ def finite_difference_error(params, dtheta, xs, zs, step_fn, h: float,
         active = jnp.ones((num_steps,))
     thetas = _per_step(dtheta, num_steps)
     x = xs[0]
-    for i in range(num_steps):
-        pert = [{"w": p["w"] + h * active[i] * d["w"], "b": p["b"]}
-                for p, d in zip(params, thetas[i])]
-        x = step_fn(pert, x, i, zs[i])
+    with jax.default_matmul_precision("highest"):
+        for i in range(num_steps):
+            pert = [{"w": p["w"] + h * active[i] * d["w"], "b": p["b"]}
+                    for p, d in zip(params, thetas[i])]
+            x = step_fn(pert, x, i, zs[i])
     return (x - xs[-1]) / h

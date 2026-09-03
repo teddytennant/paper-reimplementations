@@ -23,3 +23,11 @@ the perturbation every step shrinks ASSERT's absolute gain over DDIM by 3x but l
 the ratio alone, so some of the gain here is the self-correction any stochastic sampler
 gives against a wrong score. The decorrelation the paper argues for is measured
 directly, on the cross terms of Equation 10, in tests/test_analysis.py.
+
+Tests pass on CPU and on an H200. The equation checks in tests/test_analysis.py
+compare a JVP-based linearization against finite differences and against an
+unrolled sum, both of which need real float32 precision, not XLA's GPU default
+of TF32 matmuls (10 mantissa bits). analysis.py runs its trajectories and
+derivatives under jax.default_matmul_precision("highest") for this reason;
+without it the three checks pass on CPU and fail on GPU. Sampling itself
+(sampler.py, denoiser.py) is unaffected and still runs at the GPU default.
