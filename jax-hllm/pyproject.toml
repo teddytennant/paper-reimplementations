@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "jax-hllm"
+version = "0.1.0"
+description = "Single pass assignment decoding for generative reranking, in JAX"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Teddy Tennant", email = "teddytennant@icloud.com" }]
+requires-python = ">=3.10"
+dependencies = [
+    "jax>=0.4.30",
+    "numpy>=1.26",
+    "optax>=0.2.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "scipy>=1.11",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["hllm"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
