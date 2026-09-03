@@ -1,0 +1,19 @@
+[project]
+name = "assert-sampler"
+version = "0.1.0"
+description = "ASSERT: adaptive stochastic DDIM sampling under fixed analog CIM weight noise, in JAX"
+requires-python = ">=3.10"
+dependencies = ["jax>=0.4.30", "optax>=0.2.2"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["assert_sampler*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
