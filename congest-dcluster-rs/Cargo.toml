@@ -1,0 +1,13 @@
+[package]
+name = "congest-dcluster"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "Degree-adaptive clustering (DCluster) on a simulated CONGEST-KT1 network"
+license = "MIT"
+
+[dependencies]
+
+[[bin]]
+name = "dcluster"
+path = "src/main.rs"
