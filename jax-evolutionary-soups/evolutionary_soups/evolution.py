@@ -43,6 +43,7 @@ class EvolutionResult:
     params: dict  # the evolved front P_hat, stacked on the leading axis
     scores: np.ndarray  # (|P_hat|, n) rewards on the final chunk
     history: list = field(default_factory=list)
+    initial: dict = None  # the population generation 1 started from, S_0
 
     @property
     def size(self):
@@ -149,4 +150,6 @@ def evolve(
         scores = pool_scores[chosen]
     if scores is None:  # generations == 0
         scores = np.asarray(fitness_fn(retained, None), dtype=float)
-    return EvolutionResult(params=retained, scores=scores, history=history)
+    return EvolutionResult(
+        params=retained, scores=scores, history=history, initial=population
+    )

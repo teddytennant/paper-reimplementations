@@ -84,7 +84,42 @@ def test_preference_control_moves_along_the_evolved_front(fronts, setup):
         assert front[pick, j] == pytest.approx(front[:, j].max())
 
 
-def test_evolution_improved_on_its_starting_population(fronts):
+def test_evolution_improved_on_its_starting_population(fronts, setup, held_out):
+    """Score S_0 and S_T on the same prompts. The generation log cannot do that.
+
+    This used to take two numbers straight out of result.history: the last
+    generation's hv_retained against the first generation's hv_previous. Every
+    generation draws its own chunk D_t, so those two hypervolumes come from
+    different samples of 256 prompts, and the sample moves them further than
+    thirty generations of evolution do. Hold one population fixed and score it
+    on 40 chunks: a starting population gives sd 0.091, the front it evolves
+    into gives 0.076, and the gap between their means is 0.15. So the logged
+    difference came out negative on 39 of 150 runs, and not for one gate class
+    more than another: 8/50 per_layer, 16/50 single, 15/50 fixed. An H200 drew
+    0.352 against 0.364 on fixed and that is the one that got reported.
+
+    The search is fine. Held-out prompts are the same 512 before and after, and
+    on them every gate class gains on every draw: 25 evolution seeds against two
+    stage-1 setups, 150 runs, +0.059 at the smallest and +0.130 on average.
+    """
+    for mode, (hv, _, result) in fronts.items():
+        start = X.population_fitness(setup, result.initial, held_out, mode)
+        hv_start = hypervolume(start[nondominated(start)], setup.ref)
+        assert hv > hv_start, mode
+
+
+def test_the_generation_log_holds_up_where_theorem_3_states_it(fronts):
+    """HV_t(S_t) >= HV_t(S_{t-1}), which is the one comparison the log can make.
+
+    Both sides are the same chunk D_t, so this is the form the theorem is stated
+    in. It still dips, because greedy HVC is not an exact subset selector, and
+    it dips most for the fixed gate: over 50 runs of 30 generations each, 0.3%
+    of generations for per_layer, 0.7% for single and 6.7% for fixed, worst
+    single run 5 of 30. Why fixed is the one that trips it, I do not know. The
+    size is the part that matters and it stays small: the worst dip over those
+    150 runs was 0.62% of the final hypervolume.
+    """
     for mode, (_, _, result) in fronts.items():
-        first, last = result.history[0], result.history[-1]
-        assert last.hv_retained > first.hv_previous, mode
+        deltas = np.array([g.hv_retained - g.hv_previous for g in result.history])
+        assert np.mean(deltas < -1e-12) <= 0.3, mode
+        assert -deltas.min() < 0.02 * result.history[-1].hv_retained, mode
