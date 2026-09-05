@@ -149,17 +149,58 @@ def test_updates_use_only_the_players_own_gradients(player):
     """Uncoupledness as a property of the code, not a comment.
 
     Lines 3 to 5 of Algorithm 1 read only S_i and ema_i, both of which are
-    functions of g_i alone. So replaying one player's own g sequence through a
-    solo driver, with the other players and the game itself gone, has to
-    reproduce its iterates. It reproduces them bit for bit.
+    functions of g_i alone. Drive all three players through the replay driver
+    at once, then again with the other two players' gradient streams reversed
+    and negated. This player's iterates have to come back bit for bit, and the
+    other two have to move.
+
+    Perturbing an input row rather than comparing against a second program is
+    what makes bit equality the right assertion here. It is one compiled
+    function, called twice on the same shapes, so anything that survives is a
+    statement about the dataflow: a sum over the player axis instead of the
+    cascade axis, a shared buffer, a transposed vmap, all of them move this
+    row. The last line is there so the probe cannot pass by doing nothing.
     """
     utilities = random_game(3, 3, 1)
     traj = run_game(utilities, 300, eta=ETA)
     rho, depth = cascade_params(3)
-    replayed = replay_from_gradients(
-        traj.gradients[:, player], gamma_const(3), eta=ETA, rho=rho, depth=depth
-    )
-    assert np.array_equal(np.asarray(replayed), np.asarray(traj.strategies[:, player]))
+    driver = dict(eta=ETA, rho=rho, depth=depth)
+    base = np.asarray(replay_from_gradients(traj.gradients, gamma_const(3), **driver))
+
+    others = [j for j in range(3) if j != player]
+    perturbed = np.asarray(traj.gradients).copy()
+    perturbed[:, others] = -perturbed[::-1][:, others]
+    moved = np.asarray(replay_from_gradients(jnp.asarray(perturbed), gamma_const(3), **driver))
+
+    assert np.array_equal(moved[:, player], base[:, player])
+    assert np.abs(moved[:, others] - base[:, others]).max() > 0.1
+
+
+@pytest.mark.parametrize("driven", ["one_player_at_a_time", "all_players_at_once"])
+def test_replay_of_the_gradients_reproduces_the_run(driven):
+    """The whole run rebuilt from its own g, with the game deleted.
+
+    Same recursion as `run_game`, but `run_game` fuses it with the payoff
+    tensordots and the replay driver has nothing to fuse with, so XLA is free
+    to order the length-m reductions in Q_m differently between the two. On CPU
+    it does not and the two agree exactly; on an H200 the softmax, logsumexp
+    and <theta, x> inside the bisection come out up to one ulp apart, which
+    moved 8 of one player's 300 rounds by 2.2e-16. atol 1e-14 is 45 ulp at
+    this scale, far under anything a real coupling bug would produce, since
+    that would put one player's whole gradient into another player's theta.
+    """
+    utilities = random_game(3, 3, 1)
+    traj = run_game(utilities, 300, eta=ETA)
+    rho, depth = cascade_params(3)
+    driver = dict(eta=ETA, rho=rho, depth=depth)
+    if driven == "all_players_at_once":
+        replayed = replay_from_gradients(traj.gradients, gamma_const(3), **driver)
+    else:
+        replayed = jnp.stack(
+            [replay_from_gradients(traj.gradients[:, i], gamma_const(3), **driver) for i in range(3)],
+            axis=1,
+        )
+    assert np.allclose(np.asarray(replayed), np.asarray(traj.strategies), rtol=0, atol=1e-14)
 
 
 @pytest.mark.parametrize("utilities", [matching_pennies(), rock_paper_scissors()])

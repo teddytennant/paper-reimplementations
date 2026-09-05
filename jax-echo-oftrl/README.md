@@ -20,3 +20,11 @@ this small, at any learning rate I tried; both are flat, so the control the
 tests use is optimism switched off, which does separate. All players get the
 same action count, Q_m(theta) comes from 60 bisection steps, and float64 is
 forced on at import because the bisection does not survive float32.
+
+The suite passes on CPU and on one H200 under CUDA. Two float64 results that
+agree bit for bit on CPU can differ by an ulp on the GPU when XLA compiles them
+into differently fused kernels, so the one test that wants exact equality,
+`test_updates_use_only_the_players_own_gradients`, gets it by calling the same
+function twice on the same shapes and changing only the other players'
+gradients. Comparisons between the fused run and the replay driver carry a
+tolerance instead.

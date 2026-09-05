@@ -109,15 +109,25 @@ def replay_from_gradients(
     rho: float = 0.5,
     depth: int = 2,
 ) -> jnp.ndarray:
-    """Rerun one player's updates against a fixed gradient sequence.
+    """Rerun updates against a fixed gradient sequence, with the game gone.
 
-    `gradients` has shape (T, m). Returns the strategies (T, m) that Algorithm 1
-    produces from that sequence alone. Feeding a player's own g_i sequence from
-    `run_game` back through here must reproduce its iterates exactly, since the
-    only inputs to lines 3-5 are S_i and the cascade state.
+    `gradients` is (T, m) for a single player, or (T, N, m) to drive N players
+    side by side in the same shapes `run_game` carries. The returned strategies
+    have the matching shape. Feeding a player's own g_i sequence from `run_game`
+    back through here reproduces its iterates, since the only inputs to lines
+    3-5 are S_i and the cascade state.
+
+    Driving N players at once is not the same as running the game: the players
+    never see each other here, each row is its own recursion over its own
+    column of `gradients`. That is what makes the (T, N, m) form the useful
+    uncoupledness probe. Change one row's gradients and no other row may move.
     """
+    batch = gradients.shape[1:-1]
     m = gradients.shape[-1]
-    init = (jnp.zeros((m,), gradients.dtype), jnp.zeros((depth, m), gradients.dtype))
+    init = (
+        jnp.zeros(batch + (m,), gradients.dtype),
+        jnp.zeros(batch + (depth, m), gradients.dtype),
+    )
 
     def step(carry, g):
         acc, ema = carry
