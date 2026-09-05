@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jax-caster"
+version = "0.1.0"
+description = "CASTER: gradient-free affine statistics transport with a transportability certificate, in JAX"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Teddy Tennant", email = "teddytennant@icloud.com" }]
+requires-python = ">=3.10"
+dependencies = ["jax>=0.4.30", "jaxlib>=0.4.30", "numpy>=1.24"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "scipy>=1.10"]
+
+[tool.setuptools]
+packages = ["caster"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
