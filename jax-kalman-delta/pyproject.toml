@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jax-kalman-delta"
+version = "0.1.0"
+description = "JAX recurrences for Kalman Delta Networks (arXiv:2609.07816)"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Teddy Tennant", email = "teddytennant@icloud.com"}]
+requires-python = ">=3.10"
+dependencies = [
+    "jax>=0.4.30",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
