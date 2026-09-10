@@ -1,0 +1,25 @@
+[project]
+name = "jax-muon-c"
+version = "0.1.0"
+description = "JAX implementation of Muon-C, operator-aligned Muon for convolutional kernels"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Teddy Tennant", email = "teddytennant@icloud.com" }]
+requires-python = ">=3.10"
+dependencies = ["jax>=0.4.30", "jaxlib>=0.4.30"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
