@@ -10,4 +10,4 @@ JAX_PLATFORMS=cpu python -m pytest -q
 python scripts/smoke_train.py
 ```
 
-This repository implements spectral clipping (Algorithm 2) and Soft Musec via coupled Newton–Schulz (Algorithms 3–4) on arrays. It does not include LLM training, FineWeb/OpenWebText/C4 runs, or paper tables.
+This repository implements spectral clipping (Algorithm 2) and Soft Musec via coupled Newton-Schulz (Algorithms 3-4) on arrays. It does not include LLM training, FineWeb/OpenWebText/C4 runs, or paper tables. A 1x H200 smoke of `scripts/smoke_train.py` was submitted but never left the queue (Priority), so this release is CPU-tested only.
