@@ -1,0 +1,16 @@
+[package]
+name = "polyamorous-scheduling"
+version = "0.1.0"
+edition = "2021"
+description = "4G* deadline-driven algorithm for the Polyamorous Scheduling Problem (arXiv:2609.10641)"
+license = "MIT"
+authors = ["Teddy Tennant <teddytennant@icloud.com>"]
+publish = false
+
+[lib]
+name = "polyamorous_scheduling"
+path = "src/lib.rs"
+
+[[bin]]
+name = "schedule"
+path = "src/bin/schedule.rs"
