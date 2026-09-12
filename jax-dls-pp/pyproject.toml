@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jax-dls-pp"
+version = "0.1.0"
+description = "JAX implementation of dynamic latent space Poisson processes (arXiv:2609.08813)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Teddy Tennant", email = "teddytennant@icloud.com"}]
+dependencies = ["jax>=0.4", "jaxlib>=0.4"]
+
+[project.optional-dependencies]
+tests = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+pythonpath = ["src"]
