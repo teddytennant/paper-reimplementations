@@ -13,7 +13,7 @@ def _midpoints(edges):
 
 
 def ddpm_midpoint_risk(predict_eps, x0, eps, t_edges, soff: float = 0.008):
-    """r_k = (σ/α)² E‖ε_θ − ε‖² at interval midpoints.
+    """r_k = (1 − ᾱ(τ°)) E‖ε_θ(x_{τ°}, τ°) − ε‖² at interval midpoints (D.8).
 
     ``predict_eps(x, t)`` maps noisy states and times to ε-predictions.
     ``x0`` and ``eps`` are batched 1D samples, broadcast against the midpoint grid.
@@ -26,7 +26,7 @@ def ddpm_midpoint_risk(predict_eps, x0, eps, t_edges, soff: float = 0.008):
     x = alpha[None, :] * x0_b + sigma[None, :] * eps_b
     eps_hat = predict_eps(x, jnp.broadcast_to(t_b, x.shape))
     mse = jnp.mean(jnp.square(eps_hat - eps_b), axis=0)
-    return jnp.square(sigma / alpha) * mse
+    return jnp.square(sigma) * mse
 
 
 def fm_midpoint_risk(predict_v, x0, eps, tau_edges):

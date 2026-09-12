@@ -8,6 +8,7 @@ from fiberwise_ot.allocate import (
     phi_from_weights,
     apply_phi,
     apply_phi_inv,
+    solve_eta,
 )
 from fiberwise_ot.paths import (
     SOFF,
@@ -15,6 +16,7 @@ from fiberwise_ot.paths import (
     alphabar,
     alpha_sigma,
     cosine_vp_arc_length,
+    cosine_phase_increment,
     cond_ot_gamma,
     cond_ot_arc_length,
 )
@@ -32,6 +34,7 @@ __all__ = [
     "apply_phi_inv",
     "cond_ot_arc_length",
     "cond_ot_gamma",
+    "cosine_phase_increment",
     "cosine_vp_arc_length",
     "ddpm_midpoint_risk",
     "discrete_action",
@@ -40,5 +43,6 @@ __all__ = [
     "phi_cosine",
     "phi_from_weights",
     "sample_mixture",
+    "solve_eta",
     "train_loop",
 ]

@@ -14,7 +14,7 @@ from fiberwise_ot.allocate import (
     phi_from_weights,
     apply_phi_inv,
 )
-from fiberwise_ot.paths import alphabar, cosine_vp_arc_length, cond_ot_arc_length
+from fiberwise_ot.paths import alphabar, cosine_phase_increment, cond_ot_arc_length
 from fiberwise_ot.risk import ddpm_midpoint_risk, fm_midpoint_risk
 
 HIDDEN = 32
@@ -129,7 +129,7 @@ def estimate_interval_risk(params, key, family, n_intervals=16, n_samples=256):
     predict = _predict_from_params(params)
     if family == "ddpm":
         r = ddpm_midpoint_risk(predict, x0, eps, edges)
-        L = cosine_vp_arc_length(edges)
+        L = cosine_phase_increment(edges)
         lam = LAMBDA_DDPM
     else:
         r = fm_midpoint_risk(predict, x0, eps, edges)

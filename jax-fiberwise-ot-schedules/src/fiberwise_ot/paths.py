@@ -32,11 +32,21 @@ def alpha_sigma(t, soff: float = SOFF):
 
 
 def cosine_vp_arc_length(t_edges, soff: float = SOFF):
-    """L_k = arccos(√ᾱ(t_k)) − arccos(√ᾱ(t_{k+1}))."""
+    """True VP arc length (D.3): L_k = arccos(√ᾱ(τ_{k+1})) − arccos(√ᾱ(τ_k)).
+
+    τ increases data→noise so ᾱ decreases and L_k is positive.
+    """
     t_edges = jnp.asarray(t_edges)
     ab = jnp.clip(alphabar(t_edges, soff=soff), 0.0, 1.0)
     theta = jnp.arccos(jnp.sqrt(ab))
-    return theta[:-1] - theta[1:]
+    return theta[1:] - theta[:-1]
+
+
+def cosine_phase_increment(t_edges, soff: float = SOFF):
+    """Practical DDPM increment (D.4): Δφ_k = φ(τ_{k+1}) − φ(τ_k)."""
+    t_edges = jnp.asarray(t_edges)
+    phi = phi_cosine(t_edges, soff=soff)
+    return phi[1:] - phi[:-1]
 
 
 def cond_ot_gamma(tau):
