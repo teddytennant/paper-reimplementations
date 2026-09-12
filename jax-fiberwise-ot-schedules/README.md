@@ -8,4 +8,4 @@ export JAX_PLATFORMS=cpu
 .venv/bin/python scripts/smoke.py
 ```
 
-What does not match the paper: no CIFAR FID, no U-Net, synthetic risk only, no frozen analytic template unless a few lines.
+What does not match the paper: no CIFAR-10 FID, no U-Net, risk estimated on a 1D Gaussian mixture, no frozen analytic allocation template.
