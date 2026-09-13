@@ -1,0 +1,19 @@
+[package]
+name = "introvert-clustering"
+version = "0.1.0"
+edition = "2021"
+description = "Introvert clustering and layered introvert network decomposition (arXiv:2609.10044)"
+license = "MIT"
+authors = ["Teddy Tennant <teddytennant@icloud.com>"]
+publish = false
+
+[lib]
+name = "introvert_clustering"
+path = "src/lib.rs"
+
+[[bin]]
+name = "introvert"
+path = "src/bin/introvert.rs"
+
+[dependencies]
+rand = "0.8"
