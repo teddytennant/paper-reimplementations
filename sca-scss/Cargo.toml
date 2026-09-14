@@ -1,0 +1,16 @@
+[package]
+name = "sca-scss"
+version = "0.1.0"
+edition = "2021"
+description = "SCA to SCSS reduction and exact solvers (arXiv:2609.11160)"
+license = "MIT"
+authors = ["Teddy Tennant <teddytennant@icloud.com>"]
+publish = false
+
+[lib]
+name = "sca_scss"
+path = "src/lib.rs"
+
+[[bin]]
+name = "sca"
+path = "src/bin/sca.rs"
