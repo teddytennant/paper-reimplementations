@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dcts"
+version = "0.1.0"
+description = "Direct Conditional Transition Sampling for linear diffusion inverse problems (arXiv 2609.14596)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Teddy Tennant", email = "teddytennant@icloud.com"}]
+dependencies = [
+    "jax>=0.4.30",
+    "jaxlib>=0.4.30",
+    "numpy",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+tests = ["pytest"]
+
+[project.urls]
+Paper = "https://arxiv.org/abs/2609.14596"
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
