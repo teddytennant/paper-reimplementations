@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-import os
-
-os.environ.setdefault("JAX_PLATFORMS", "cpu")
-
 import jax
 import jax.numpy as jnp
 
