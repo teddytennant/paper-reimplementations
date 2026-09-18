@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jax-admissable"
+version = "0.1.0"
+description = "JAX implementation of adversarial-missingness training for RL observations (arXiv:2609.15297)"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "Teddy Tennant", email = "teddytennant@icloud.com" }]
+dependencies = [
+    "jax>=0.11",
+    "numpy",
+]
+
+[project.optional-dependencies]
+tests = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
