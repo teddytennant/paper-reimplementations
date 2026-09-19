@@ -1,0 +1,3 @@
+arXiv:2609.16528
+FlowATC: Aircraft Trajectory Prediction via Flow Matching
+Aircraft trajectory inpainting with a DiT backbone and Conditional Flow Matching.
