@@ -1,0 +1,15 @@
+[package]
+name = "lawo"
+version = "0.1.0"
+edition = "2021"
+description = "Leave-a-window-out next-token functional estimation (arXiv:2609.19529)"
+license = "MIT"
+authors = ["Teddy Tennant <teddytennant@icloud.com>"]
+publish = false
+
+[lib]
+name = "lawo"
+path = "src/lib.rs"
+
+[dependencies]
+rand = "0.8"
