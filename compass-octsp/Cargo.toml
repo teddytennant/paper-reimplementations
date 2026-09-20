@@ -1,0 +1,12 @@
+[package]
+name = "compass-octsp"
+version = "0.1.0"
+edition = "2021"
+authors = ["Teddy Tennant <teddytennant@icloud.com>"]
+license = "MIT"
+description = "COMPASS exact/CPU solver for Ordered Clustered TSP (arXiv:2609.20352)"
+publish = false
+
+[lib]
+name = "compass_octsp"
+path = "src/lib.rs"
