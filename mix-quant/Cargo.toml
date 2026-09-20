@@ -1,0 +1,12 @@
+[package]
+name = "mix-quant"
+version = "0.1.0"
+edition = "2021"
+description = "Micro-Inverted-Scaling (MiX) software format kernel (arXiv:2609.19683)"
+license = "MIT"
+authors = ["Teddy Tennant <teddytennant@icloud.com>"]
+publish = false
+
+[lib]
+name = "mix_quant"
+path = "src/lib.rs"
