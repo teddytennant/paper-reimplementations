@@ -5,7 +5,8 @@ import os
 import sys
 from pathlib import Path
 
-os.environ.setdefault("JAX_PLATFORMS", "cpu")
+if os.environ.get("POINTLAM_CPU", "") == "1":
+    os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
 ROOT = Path(__file__).resolve().parents[1]
 src = ROOT / "src"
