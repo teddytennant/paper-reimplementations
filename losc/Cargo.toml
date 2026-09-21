@@ -1,0 +1,11 @@
+[package]
+name = "losc"
+version = "0.1.0"
+edition = "2021"
+authors = ["Teddy Tennant <teddytennant@icloud.com>"]
+license = "MIT"
+publish = false
+description = "Logic Screening (LoSc) kernel for sparse identification in pooled tests"
+
+[dependencies]
+rand = "0.8"
