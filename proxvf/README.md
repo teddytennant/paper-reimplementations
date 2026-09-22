@@ -1,0 +1,1 @@
+Proximal residual value-function allocation (https://arxiv.org/abs/2609.23242) solves a separable budgeted allocation by dual bisection on the marginal of a smooth proximal residual. Install with `pip install -e .` and run tests with `pytest`. This is a toy separable allocator: no environment, no learned value network, and no real-time control loop.
