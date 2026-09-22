@@ -1,0 +1,20 @@
+[project]
+name = "hspec"
+version = "0.1.0"
+description = "H-Spec hybrid target-context injection (toy JAX implementation of arXiv 2609.24197)."
+requires-python = ">=3.11"
+dependencies = [
+  "jax",
+  "numpy",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
