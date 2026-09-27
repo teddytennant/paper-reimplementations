@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "teda"
+version = "0.1.0"
+description = "TEDA: transmittance extraction and distance alignment for passive LWIR hyperspectral ranging (arXiv:2609.28967)"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{name = "Teddy Tennant", email = "teddytennant@icloud.com"}]
+dependencies = ["jax>=0.4.30", "jaxlib", "numpy"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
