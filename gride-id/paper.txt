@@ -1,0 +1,3476 @@
+                                               Interpretable intrinsic dimension estimation through
+                                                 componentwise calibration of distance and angle
+                                                               Chih-Hsuan Huanga , Chih-Wei Chena , Szu-Chi Chunga,∗
+                                                a Department of Applied Mathematics, National Sun Yat-sen University, No. 70, Lienhai
+
+                                                                           Rd., Kaohsiung, 80424, Taiwan
+
+                                         Abstract
+arXiv:2609.37114v1 [cs.LG] 29 Sep 2026
+
+
+
+
+                                         DANCo (Dimensionality from Angle and Norm Concentration) jointly calibrates
+
+                                         nearest-neighbor distance and angular statistics and consistently reaches state-of-the-
+
+                                         art accuracy on clean intrinsic-dimension (ID) benchmarks. Practical data, however,
+
+                                         introduce neighborhood-relative noise and sample-amplitude heterogeneity that can
+
+                                         distort these geometric signals. We reformulate DANCo componentwise, retaining
+
+                                         separate distance and angular discrepancy curves so that the source of an estimate can
+
+                                         be identified and interpreted. For the distance component, we derive a closed-form
+
+                                         Kullback–Leibler divergence for the generic-order ratios of the generalized ratios ID
+
+                                         estimator (Gride); when both angular parameters are matched (Full), Gride reduces
+
+                                         mean percentage error from 27.7% to 17.6% at noise equal to 40% of typical neighbor
+
+                                         spacing on 24 manifolds. For the angular component, two sampling regimes moti-
+
+                                         vate aligning mean direction while retaining concentration matching (Profiled). On a
+
+                                         Gaussian scale mixture with generating dimension 70 embedded in 100 dimensions,
+
+                                         profiling raises the Minimum Neighbor Distance (MiND) estimate from 22.8 to 66.7,
+
+                                         while removing the known amplitudes restores MiND–Full to 71.9; the control thus
+
+                                         attributes the Full shortfall to amplitude heterogeneity. On CIFAR-10 and ImageNet,
+
+                                         amplitude-reducing normalizations move angular location toward the references and
+
+                                         narrow the Full–Profiled gap, an observational counterpart to the controlled mixture.
+
+                                         Across four pretrained convolutional neural networks, Gride–Profiled, the two-nearest-
+
+                                         neighbor estimator (TWO-NN), and the maximum-likelihood estimator (MLE) exhibit
+
+                                         similar rise-and-fall profiles, while Full–Profiled differences identify the layers most
+
+                                           ∗ Corresponding author.
+                                            Email address: phonchi@math.nsysu.edu.tw (Szu-Chi Chung)
+
+
+                                                                                         1
+sensitive to angular calibration.
+Keywords: Intrinsic dimension, model-based estimation, nearest neighbor, angular
+concentration, Kullback–Leibler divergence, DANCo
+
+
+1. Introduction
+
+   Intrinsic dimension (ID) helps characterize dataset complexity, guide dimension-
+
+ality reduction, and interpret geometric changes across neural-network representa-
+
+tions [1, 2]. It is the number of coordinates needed to represent local variability
+
+within a higher-dimensional observation space. Two local geometric signatures carry
+
+information about ID: nearest-neighbor distances reflect volume growth, while an-
+
+gles between neighbor displacements reflect angular concentration. Calibrating these
+
+signatures connects the geometry of an observed sample to a dimension estimate.
+
+   Dimensionality from Angle and Norm Concentration (DANCo) calibrates both
+
+signatures against simulated references indexed by candidate dimension. Their finite-
+
+sample errors respond differently to neighborhood geometry: distance-based estimates
+
+tend to underestimate the generating dimension, whereas angle-based estimates tend
+
+to overestimate it. The original DANCo study describes these errors as loosely coun-
+
+terbalancing [3], and subsequent work quantifies angular overestimation [4]. Joint
+
+reference matching lets the two signals support a common candidate and reduces the
+
+finite-sample high-ID bias of purely distance-based estimates. Across independent
+
+clean benchmarks, DANCo is consistently among the state of the art: DANCo has
+
+the lowest mean percentage error and leading Friedman rank in the Campadelli et
+
+al. benchmark [5], and independent evaluations place it first or among the most ac-
+
+curate [6, 7, 8, 9]. A recent comparison finds its spline-based variant, FastDANCo,
+
+most reliable at high dimension [10]. DANCo serves as a state-of-the-art reference in
+
+comparisons of local estimators [11, 12, 13].
+
+   Practical data add three conditions these benchmarks do not stress. First, measure-
+
+ment and preprocessing noise perturb the smallest neighbor distance first, so ratios
+
+
+
+                                          2
+based on larger neighbor orders are more robust to it (Section 4.3). Second, im-
+
+age contrast and unnormalized neural activations produce observations with different
+
+centered norms, a condition we call sample-amplitude heterogeneity. Through neigh-
+
+bor selection, this variation changes both distance and angular statistics even when the
+
+distance-ratio orders are fixed. Third, learned representations require candidate dimen-
+
+sions in the hundreds, where the thin-shell angular regime makes sample-amplitude
+
+effects on angular location consequential (Section 3.4), while ordinary Bessel evalua-
+
+tion of the angular reference can also overflow (Section 3.5). A combined dimension
+
+estimate alone does not show which component determined its value or how these
+
+conditions affected it.
+
+   We develop a componentwise formulation that makes those influences explicit and
+
+lets each part of the calibration address its condition. Separate distance, angular, and
+
+combined discrepancy curves reveal agreement between the geometric signals and
+
+identify which term shifts the minimum. For the distance component, we use the
+
+generic-order ratio introduced by Gride [11] and derive the Kullback–Leibler (KL)
+
+divergence needed to calibrate its law. For the angular component, two sampling
+
+regimes distinguish concentration from a mean direction that changes with geometry
+
+and sample amplitude. We call matching both von Mises parameters Full and aligning
+
+mean direction before matching concentration Profiled; reporting both exposes the
+
+effect of angular location. Stable Bessel evaluation extends the calibrated analysis to
+
+candidate dimensions in the hundreds.
+
+   We make four contributions:
+
+   1. We formulate componentwise calibration through explicit statistics, references,
+
+      discrepancies, and nuisance-parameter treatments. Separate and joint minima
+
+      make the influence of distance and angular geometry interpretable. The formu-
+
+      lation also supports interchangeable components: a statistic can fill either slot
+
+      when its dimension-indexed reference law carries a computable discrepancy
+
+
+
+                                           3
+      (Section 3.2).
+
+   2. We derive a closed-form KL divergence for generic-order Gride ratios. This
+
+      brings their robustness to neighborhood-relative noise into the calibrated objec-
+
+      tive (Section 3.3).
+
+   3. We distinguish local-interior and high-dimension, low-sample-size angular lim-
+
+      its to motivate mean-direction profiling. A Gaussian scale mixture tests pro-
+
+      filing under controlled sample-amplitude heterogeneity, and dividing out the
+
+      known simulated amplitudes recovers Full calibration by removing the angular-
+
+      reference mismatch (Sections 3.4 and 4.4.1).
+
+   4. We carry componentwise analysis into learned representations. Scaled Bessel
+
+      evaluation and distance-specific reference surfaces built from a shared simula-
+
+      tion grid make calibrated estimation practical through candidate dimension 400.
+
+      On natural images, the component statistics show how amplitude-reducing nor-
+
+      malization moves angular location toward the reference. Across four pretrained
+
+      convolutional neural networks (CNNs), Gride–Profiled layer-wise profiles share
+
+      the rise-and-fall course of the two-nearest-neighbor and maximum-likelihood
+
+      estimators, and paired Full–Profiled comparisons place the largest median sep-
+
+      aration at the Profiled peak, with Full estimates 100–214 dimensions lower
+
+      (Sections 3.5 and 4).
+
+
+2. Related work
+
+2.1. Local geometric estimators and their calibration
+
+   ID estimators differ in the geometric information they use: projections, global
+
+scaling, and local distances provide distinct starting points [1, 9]. Local principal com-
+
+ponents recover affine structure [14], and correlation methods use fractal scaling [15].
+
+Nearest-neighbor methods infer dimension from local volume growth. The Levina–
+
+Bickel maximum-likelihood estimator (MLE) uses several neighbor radii through a
+
+
+                                            4
+local Poisson model [16], the two-nearest-neighbor estimator (TWO-NN) retains only
+
+the ratio of the first two neighbor distances [12], and Gride extends that ratio to generic
+
+neighbor orders [11]. Larger orders trade locality for robustness to short-scale noise,
+
+which otherwise inflates the estimate toward the ambient dimension [11].
+
+    Angular geometry supplies a complementary source of dimension information,
+
+used by the angle-based intrinsic dimensionality (ABID) estimator. ABID estimates
+
+intrinsic dimension from the second moment of cosine similarities between pairs of
+
+normalized neighbor-displacement directions [4], whereas expected simplex skewness
+
+(ESS) uses simplex geometry [17]. DANCo models mutual neighbor angles with a
+
+von Mises law whose concentration grows with dimension and combines this angular
+
+information with distance evidence [3]. In ABID and DANCo, angular spread therefore
+
+carries the dimension information.
+
+    The treatment of finite-sample effects provides a second organizing distinction.
+
+At high generating dimension, neighbors occupy a sizable fraction of the support,
+
+inflating the distance ratio that a local estimator inverts and producing underestima-
+
+tion [3, 5]. One response fits explicit corrections: the corrected median Farahmand–
+
+Szepesvári–Audibert estimator (cmFSA) rescales a median local estimate [6], and
+
+GeoMLE combines evidence across neighborhood sizes [13]. Distribution match-
+
+ing provides another response by placing finite-sample effects on both sides of the
+
+comparison. The Minimum Neighbor Distance KL estimator (MiNDKL ) matches
+
+distance statistics to uniform-ball references [18, 19], and DANCo adds angular KL
+
+matching [3]. Recent methods correct underestimation [7, 8] or learn dimension
+
+from neighbor statistics [20]. Implementations of related estimators are available in
+
+scikit-dimension [21], DADApy [22], and intRinsic [23]. Distribution matching
+
+is the basis of the calibration studied here.
+
+
+
+
+                                            5
+2.2. Intrinsic dimension in learned representations
+
+    ID estimates also provide a way to examine geometry across learned represen-
+
+tations. Ansuini et al. [2] reported layer-wise TWO-NN curves that rise, peak, and
+
+decline toward the output, with last-hidden-layer estimates strongly associated with test
+
+accuracy. Pope et al. [24] linked lower dataset ID to lower sample complexity. Related
+
+studies analyze generative and diffusion models [25, 26, 27] and transformers [28],
+
+and layer-wise ID profiles also characterize variational autoencoders, whose curves
+
+change shape once the bottleneck exceeds the data ID [29].
+
+    Interpreting such profiles requires distinguishing the behavior of an estimator
+
+from the dimension of the underlying representation. Schulte and Rügamer [30]
+
+show that pointwise and Hausdorff dimensions are nonincreasing through Lipschitz
+
+network maps, while rising nearest-neighbor estimates can reflect distance ratios and
+
+representation expansion. This distinction motivates our use of CNN curves to study
+
+representation geometry and sensitivity to calibration.
+
+
+3. Method
+
+    Our construction retains DANCo’s joint calibration while making each com-
+
+ponent available for interpretation and adjustment.                   Generic-order ratios address
+
+neighborhood-relative noise, mean-direction profiling addresses sample-amplitude
+
+heterogeneity, and scaled Bessel evaluation reaches candidates in the hundreds, within
+
+one objective.
+
+    Let X = {𝑥𝑖 }𝑖=1
+                 𝑁
+                     ⊂ R𝐷 be sampled near a 𝑑-dimensional manifold. Uppercase 𝑋𝑖
+
+denotes a random vector and lowercase 𝑥 𝑖 its observed value. If 𝑥𝑖 ( 𝑗 ) is the 𝑗-th nearest
+
+neighbor of 𝑥 𝑖 , define
+
+                                                   𝑥𝑖 ( 𝑗 ) − 𝑥𝑖
+       𝑟 𝑖, 𝑗 = ∥𝑥𝑖 ( 𝑗 ) − 𝑥 𝑖 ∥ 2 ,   𝑢 𝑖, 𝑗 =                 ,   𝜃 (𝑖)
+                                                                       𝑗ℓ = arccos⟨𝑢 𝑖, 𝑗 , 𝑢 𝑖,ℓ ⟩.   (1)
+                                                        𝑟 𝑖, 𝑗
+
+Here 𝑁 is sample size, 𝐷 is ambient dimension, and 𝑑 is generating ID when known.
+
+
+                                                       6
+In Eq. (1), the distance 𝑟 𝑖, 𝑗 measures local separation, while 𝜃 (𝑖)
+                                                                   𝑗ℓ ∈ [0, 𝜋] is an
+
+angle between neighbor displacements. The centered norm 𝑎 𝑖 = ∥𝑥 𝑖 − 𝑥∥   ¯ 2 , with
+
+𝑥¯ = 𝑁 −1 𝑖 𝑥𝑖 , measures an observation’s displacement from the global mean and is
+         Í
+
+an observable measure of its amplitude. We use 𝑘 for the working 𝑘-nearest-neighbor
+
+(kNN) neighborhood size.
+
+
+3.1. Local statistics and DANCo calibration
+
+    Distance calibration will use two published ratio laws: the generic-order Gride law
+
+and DANCo’s first-neighbor law. The Gride ratio 𝜇𝑖;𝑘1 ,𝑘2 = 𝑟 𝑖,𝑘2 /𝑟 𝑖,𝑘1 , for neighbor
+
+orders 𝑘 1 < 𝑘 2 , has the following density under the local Poisson model, where 𝐵(𝑎, 𝑏)
+
+is the beta function:
+
+                                             𝑑 (𝜇 𝑑 − 1) 𝑘2 −𝑘1 −1
+                𝑓 (𝜇; 𝑑, 𝑘 1 , 𝑘 2 ) =                               ,         𝜇 > 1.      (2)
+                                         𝜇 𝑑 (𝑘2 −1)+1 𝐵(𝑘
+                                                         2 − 𝑘1, 𝑘1)
+
+
+Denti et al. [11] derive this law; the TWO-NN ratio of the first two neighbor distances
+
+is its (𝑘 1 , 𝑘 2 ) = (1, 2) case [12, 11]. DANCo [3] pairs a first-neighbor distance statistic
+
+with angular statistics and calibrates them against samples simulated at each candidate
+
+dimension.
+
+
+Distance statistic. For each point, let 𝜌𝑖 = 𝑟 𝑖,1 /𝑟 𝑖,𝑘+1 . Under the DANCo local model,
+
+this ratio has density
+
+
+                    𝑔(𝜌; 𝑘, 𝑑) = 𝑘 𝑑𝜌 𝑑−1 (1 − 𝜌 𝑑 ) 𝑘−1 ,              0 < 𝜌 < 1.
+
+
+Maximum likelihood over {𝜌𝑖 } gives 𝑑ˆdist .
+
+                         
+Angular statistic. The 𝑘2 pairwise neighbor angles are modeled by
+
+                                                     𝑒 𝜏 cos( 𝜃 −𝜈)
+                                     𝑞(𝜃; 𝜈, 𝜏) =                   ,
+                                                       2𝜋𝐼0 (𝜏)
+
+
+
+                                                    7
+where 𝐼0 is the modified Bessel function of the first kind of order zero. The physical
+
+neighbor angles lie in [0, 𝜋]; DANCo embeds them in the circle and uses this 2𝜋-
+
+periodic von Mises model. Mean direction 𝜈 locates the angles, while concentration
+
+𝜏 ≥ 0 measures their spread and carries the dimension dependence in the DANCo
+
+model.
+
+     The circular mean is the direction of the mean resultant vector. For angles
+                                          Í          Í
+𝛼1 , . . . , 𝛼𝑛 , it is computed as atan2( 𝑟 sin 𝛼𝑟 , 𝑟 cos 𝛼𝑟 ) [31, Sec. 2.3, Eqs. (2.7)–
+                                                          
+(2.9)]. Per-center 𝜈ˆ𝑖 applies this definition to the 𝑘2 angles, while 𝜏ˆ𝑖 uses Fisher’s
+
+three-branch maximum-likelihood approximation [31, Sec. 3.3.6, Eq. (3.47)]. DANCo
+
+aggregates centers by
+
+                                                                !                𝑁
+                                    ∑︁               ∑︁                      1 ∑︁
+                       𝜈ˆ = atan2        sin 𝜈ˆ𝑖 ,        cos 𝜈ˆ𝑖 ,   𝜏ˆ =         𝜏ˆ𝑖 .
+                                    𝑖                𝑖
+                                                                             𝑁 𝑖=1
+
+When the per-center directions cancel, the circular mean is undefined; such zero
+
+resultants use the distance fallback described in Supplementary Algorithm S1.
+
+
+Distribution matching. DANCo creates one reference for each candidate 𝑚 ∈
+
+{1, . . . , 𝑚 max }.    It simulates 𝑁 points from the 𝑚-dimensional unit hyperball
+
+{𝑦 ∈ R𝑚 : ∥𝑦∥ 2 ≤ 1} and records
+
+
+                                                  ref ref ref
+                                              ( 𝑑ˆ𝑚  , 𝜈𝑚 , 𝜏𝑚 ).
+
+
+The candidate 𝑚 differs from the unknown 𝑑 and ambient dimension 𝐷. For densities
+
+𝑝 and 𝑞, define
+                                               ∫
+                             KL( 𝑝∥𝑞) =              𝑝(𝑡) log{𝑝(𝑡)/𝑞(𝑡)} 𝑑𝑡.
+
+
+DANCo’s spherical reference model factorizes the distance and angular laws, so their
+
+KL divergences add [3]. This joint calibration uses radial volume growth and direc-
+
+
+
+
+                                                          8
+tional concentration to support the same candidate dimension. DANCo selects
+
+
+                                               ref                        ref ref 
+  𝑑ˆ = arg min KL 𝑔(·; 𝑘, 𝑑ˆdist ) ∥ 𝑔(·; 𝑘, 𝑑ˆ𝑚  ) + KL 𝑞(·; 𝜈, ˆ ∥ 𝑞(·; 𝜈𝑚
+                                                              ˆ 𝜏)            , 𝜏𝑚 ) . (3)
+           𝑚
+
+
+For 𝑞 𝑎 = 𝑞(·; 𝜈 𝑎 , 𝜏𝑎 ), 𝑎 ∈ {1, 2}, the von Mises term is [32]
+
+                                          𝐼0 (𝜏2 ) 𝐼1 (𝜏1 )                      
+               KL(𝑞 1 ∥𝑞 2 ) = log                +         𝜏1 − 𝜏2 cos(𝜈2 − 𝜈1 ) ,   (4)
+                                          𝐼0 (𝜏1 ) 𝐼0 (𝜏1 )
+
+where 𝐼0 and 𝐼1 are modified Bessel functions. Writing 𝐴 = 𝐼1 /𝐼0 , Eq. (4) separates
+
+into a concentration term, log{𝐼0 (𝜏2 )/𝐼0 (𝜏1 )} + 𝐴(𝜏1 ) (𝜏1 − 𝜏2 ), and the nonnegative
+
+angular-location penalty 𝐴(𝜏1 )𝜏2 {1 − cos(𝜈2 − 𝜈1 )}. For a mean-direction gap that is
+
+not a multiple of 2𝜋 and positive observed concentration, the penalty grows with the
+
+reference concentration 𝜏2 . When the gap varies across candidates, its trend depends
+
+on both reference parameters; a rising penalty favors lower candidates even when
+
+the concentrations agree. This separates two influences within angular calibration:
+
+agreement in concentration and the cost of a difference in mean direction.
+
+    Optional interpolation around the minimum yields a fractional estimate. We call
+
+Eq. (3) a composite calibration objective. To reduce repeated reference-generation
+
+cost, FastDANCo replaces simulation at evaluation time with precomputed smoothing
+
+splines over (𝑁, 𝑚) [3, Sec. 4.2]. Computational complexity and memory bounds are
+
+derived in Supplementary Section S2.2.
+
+3.2. Componentwise model-based calibration
+
+    To interpret the estimate in Eq. (3), we retain its distance and angular discrepancy
+
+curves separately throughout calibration. Let Δdist (𝑚) and Δang (𝑚) denote these
+
+discrepancies between the observed statistics and their dimension-𝑚 references. Their
+
+pointwise sum defines the componentwise estimate:
+
+
+               𝑑ˆ =      arg min         𝐽 (𝑚),     𝐽 (𝑚) = Δdist (𝑚) + Δang (𝑚).     (5)
+                      𝑚∈ {1,...,𝑚max }
+
+
+                                                   9
+                                               Local 𝑘NN geometry:
+                                           distances 𝑟𝑖,𝑗 and angles 𝜃(𝑖)
+                                                                      𝑗ℓ
+
+
+
+
+         MiND or Gride                                                                     Full or Profiled
+
+                    Distance component                                     Angular component
+               statistic: ratio 𝜌𝑖 or 𝜇𝑖;𝑘1 ,𝑘2                      statistic: mutual-angle (𝜈,̂ 𝜏)
+                                                                                                   ̂
+               reference: law indexed by 𝑚                                reference: (𝜈ref  ref
+                                                                                       𝑚 , 𝜏𝑚 )
+                   discrepancy: Δdist (𝑚)                                discrepancy: Δang (𝑚)
+
+
+
+
+                                          𝐽(𝑚) = Δdist (𝑚) + Δang (𝑚)
+distance-only 𝑑 ̂                                                                                      angle-only 𝑑 ̂
+                                             𝑑 ̂ = arg min 𝐽(𝑚)
+                                                              𝑚
+
+
+
+Figure 1: Componentwise calibration. Minimum Neighbor Distance (MiND) or the generalized ratios
+ID estimator (Gride) supplies the distance discrepancy; Full or Profiled matching supplies the angular
+discrepancy. Each curve can be minimized separately, and their pointwise sum forms the combined
+objective. Solid arrows feed the combined objective; dashed branches lead to the component-only minima.
+Comparing the three minima shows how each component affects the estimate.
+
+
+The combination retains DANCo’s equal weights. We use composite for the summed
+
+curve 𝐽 and componentwise for the formulation that keeps both terms visible.
+
+    The componentwise formulation specifies four elements for each component: ob-
+
+served statistic, dimension-indexed reference, discrepancy, and treatment of nuisance
+
+parameters. The component boxes of Figure 1 show the first three; the labels identify
+
+the distance statistic and the angular nuisance treatment.
+
+    MiND–Full is the original DANCo objective. The two choices yield four variants
+
+on identical data, candidate dimensions, and reference construction. Changing MiND
+
+to Gride replaces the distance statistic and reference law; changing Full to Profiled
+
+replaces the angular discrepancy with the profiled form of Eq. (6) below, specialized
+
+to the angular component in Eq. (9). The separate curves then reveal the influence of
+
+each change on the combined minimum.
+
+    Nuisance parameters control aspects of the match that need not carry the target
+
+dimension information. For component 𝑐, let 𝜆 𝑐 ∈ Λ𝑐 be such a parameter in the
+
+reference. Profiling compares the data with the best-aligned reference within that
+
+
+                                                       10
+family:
+                                 prof
+                               Δ𝑐 (𝑚) = inf Δ𝑐 (𝑚; 𝜆 𝑐 ).                                   (6)
+                                            𝜆𝑐 ∈Λ𝑐
+
+
+We report both Full and Profiled curves; their difference quantifies the contribution of
+
+mean-direction alignment.
+
+    The construction extends beyond these four combinations under a common admis-
+
+sion condition: a statistic enters either slot when its reference law is indexed by a fitted
+
+dimension and carries a computable discrepancy. The distance component admits
+
+analytic examples. For the TWO-NN case (𝑘 1 , 𝑘 2 ) = (1, 2) of Eq. (2), the factor
+
+𝑘 2 − 𝑘 1 − 1 of the generic-order divergence derived in Section 3.3 vanishes and the di-
+
+vergence collapses to the closed form log( 𝑑ˆdist /𝑑ˆ𝑚
+                                                     ref ) + 𝑑ˆref / 𝑑ˆ −1. The Levina–Bickel
+                                                               𝑚       dist
+              Í 𝑘−1
+log-ratio sum 𝑗=1 log(𝑟 𝑖,𝑘 /𝑟 𝑖, 𝑗 ) is Gamma(𝑘 − 1, 1/𝑑), with shape 𝑘 − 1 and scale
+
+1/𝑑, under the same Poisson-process approximation [16]. Both examples therefore
+
+enter the calibrated objective without new derivations.
+
+    For the angular component, ABID’s pairwise-cosine second moment, E[𝐶 2 ] = 1/𝑑
+
+under its isotropic model [4], can supply a moment-based discrepancy, and simplex
+
+statistics such as ESS enter through Monte Carlo reference laws.
+
+3.3. Generic-order distance calibration
+
+    DANCo’s MiND statistic, 𝜌𝑖 = 𝑟 𝑖,1 /𝑟 𝑖,𝑘+1 , anchors the distance comparison at the
+
+first neighbor. To reduce sensitivity to short-scale noise, we substitute the Gride ratio
+
+𝜇𝑖;𝑘1 ,𝑘2 = 𝑟 𝑖,𝑘2 /𝑟 𝑖,𝑘1 from Eq. (2), using 𝑘 1 = ⌈𝑘/2⌉ and 𝑘 2 = 2𝑘 1 . The largest neighbor
+
+orders are comparable: MiND uses order 𝑘 + 1, whereas Gride uses order 𝑘 when
+
+𝑘 is even. Gride supplies the generic-order ratio law and likelihood estimator [11].
+
+Integrating this statistic into Eq. (5) requires a divergence between its fitted data law
+
+and each finite-sample reference law, which we derive below.
+
+    We fit the observed dimension 𝑑ˆdist with the published Gride maximum-likelihood
+
+procedure [11]. Applying the same procedure to the reference sample simulated at
+
+candidate dimension 𝑚 gives 𝑑ˆ𝑚
+                              ref .
+
+
+
+                                              11
+    Let the data and dimension-𝑚 reference laws be 𝑓 = 𝑓 (·; 𝑑ˆdist , 𝑘 1 , 𝑘 2 ) and 𝑓𝑚 =
+
+𝑓 (·; 𝑑ˆ𝑚
+        ref , 𝑘 , 𝑘 ), and define 𝛾 = 𝑑ˆref / 𝑑ˆ
+               1 2                 𝑚    𝑚       dist > 0. Their KL divergence is
+
+
+                               𝑑ˆdist                𝑑ˆref                        
+                                                         𝑚
+            KL( 𝑓 ∥ 𝑓𝑚 ) = log        +  (𝑘 2 −  1)         − 1   Ψ(𝑘 2 ) − Ψ(𝑘 1 )
+                                 ˆ
+                                𝑑𝑚ref                  ˆ
+                                                      𝑑dist                             (7)
+                                               h                                    i
+                            + (𝑘 2 − 𝑘 1 − 1) Ψ(𝑘 2 − 𝑘 1 ) − Ψ(𝑘 1 ) − I (𝛾𝑚 ) .
+
+
+Here Ψ is the digamma function. For the integer neighbor orders used throughout, the
+
+beta-prime expectation I (𝛾𝑚 ) reduces to a finite sum of 𝑘 2 − 𝑘 1 digamma terms, so
+
+the divergence is available in closed form. Supplementary Section S1.1 derives the
+
+transformation, the closed form, and the check KL( 𝑓 ∥ 𝑓 ) = 0. Substituting the ratio
+
+changes only the distance slot of Eq. (5); the angular statistic and the equal-weight
+
+combination are unchanged, so any accuracy difference from MiND–Full isolates the
+
+distance statistic.
+
+
+3.4. Angular concentration and profiled divergence
+
+    Angular calibration compares both concentration 𝜏 and mean direction 𝜈, but these
+
+parameters have different geometric roles. Distinguishing them explains when location
+
+alignment can preserve useful concentration matching. We develop this distinction in
+
+two sampling regimes, with proofs in Supplementary Section S1.2.
+
+Proposition 1 (The mean direction is dimension-free under symmetry). Let 𝑢, 𝑣 be
+
+independent uniform directions in R𝑑 and 𝜃 the angle between them. Then 𝜃 has density
+
+proportional to sin𝑑−2 𝜃 on [0, 𝜋] [33, Lemmas 11–12, Eqs. (12)–(13)], symmetric
+
+about 𝜋/2; in particular E[𝜃] = 𝜋/2 exactly for every 𝑑 ≥ 2.
+
+    Proposition 1 applies to a manifold neighborhood under the local-symmetry con-
+
+dition of Supplementary Section S1.2: at an interior point, with 𝑑 and 𝑘 fixed while
+
+𝑁 → ∞, the normalized kNN displacements converge to independent uniform di-
+
+rections on the unit sphere of the tangent space. Taking the sample limit before 𝑑
+
+grows then gives angles with mean 𝜋/2 and variance of order 1/𝑑. A data–reference
+
+
+                                              12
+gap in the finite-sample 𝜈ˆ then diagnoses a mismatch with the calibrated reference
+
+geometry. Concentration retains the dimension information posited by the DANCo
+
+model, 𝜏 ≈ 𝑑 [3].
+
+    The second regime fixes 𝑁 and 𝑘 while 𝑑 → ∞, so neighborhoods can span
+
+nonlocal geometry. The following lemma states the thin-shell and near-orthogonality
+                                                      𝑝
+limits used throughout this regime. We write −
+                                             → for convergence in probability.
+
+Lemma 1 (Thin-shell concentration and near-orthogonality). For each 𝑠 in a fixed
+
+finite index set, let 𝑍 𝑠,1 , 𝑍 𝑠,2 , . . . be an independent and identically distributed (i.i.d.)
+
+sequence with mean zero, variance one, and finite fourth moment. Assume the se-
+
+quences are mutually independent, and let 𝑍 𝑠(𝑑) = (𝑍 𝑠,1 , . . . , 𝑍 𝑠,𝑑 ) ∈ R𝑑 be the vector
+
+of its first 𝑑 coordinates. Then, simultaneously over the fixed collection,
+
+                     ∥𝑍 𝑠(𝑑) ∥ 2 𝑝          ⟨𝑍 𝑠(𝑑) , 𝑍𝑡(𝑑) ⟩ 𝑝
+                                 −
+                                 → 1,                         −
+                                                              →0       (𝑠 ≠ 𝑡).
+                         𝑑                          𝑑
+
+    Lemma 1 places observations on an asymptotically thin shell with nearly orthogonal
+
+directions. These limits are the elementary coordinatewise case of standard high-
+
+dimension, low-sample-size geometry [34]; Supplementary Section S1.2 gives the
+
+proof. The estimator uses angles between displacements from a shared center. The next
+
+proposition translates the concentration limits into that geometry, including unequal
+
+shell radii.
+
+Proposition 2 (Displacement-angle limit under norm and inner-product concentra-
+
+tion). For each 𝑑, let 𝑋𝑠(𝑑) ∈ R𝑑 and let 𝜃 (𝑖,𝑑)
+                                            𝑗ℓ    be the angle between 𝑋 𝑗(𝑑) − 𝑋𝑖(𝑑) and
+
+𝑋ℓ(𝑑) − 𝑋𝑖(𝑑) . Suppose there are nonnegative constants 𝑅𝑠 such that, simultaneously
+                                𝑝                                                 𝑝
+for fixed 𝑖, 𝑗, ℓ, ∥ 𝑋𝑠(𝑑) ∥ 2 /𝑑 −
+                                  → 𝑅𝑠2 for 𝑠 ∈ {𝑖, 𝑗, ℓ} and ⟨𝑋𝑠(𝑑) , 𝑋𝑡(𝑑) ⟩/𝑑 −
+                                                                                 → 0 for 𝑠 ≠ 𝑡,
+
+with (𝑅𝑖2 + 𝑅 2𝑗 ) (𝑅𝑖2 + 𝑅ℓ2 ) > 0. Then
+
+
+                                        𝑝                 𝑅𝑖2
+                           cos 𝜃 (𝑖,𝑑)
+                                 𝑗ℓ    −
+                                       → √︃                                .                  (8)
+                                              (𝑅𝑖2 + 𝑅 2𝑗 ) (𝑅𝑖2 + 𝑅ℓ2 )
+
+
+                                               13
+With fixed 𝑁, the convergence is simultaneous over all triples whenever the assumptions
+
+hold simultaneously.
+
+                                                                        𝑝
+   On a homogeneous thin shell, 𝑅𝑖 = 𝑅 𝑗 = 𝑅ℓ , so 𝜃 −
+                                                     → 𝜋/3. This connects the
+
+classical concentration of high-dimensional samples near a shell with the displacement-
+
+angle geometry used by DANCo. Supplementary Corollaries S1.5–S1.7 specialize the
+
+result to i.i.d. coordinates, uniform hyperballs, and Gaussian scale mixtures. Figure 2
+
+illustrates the transition from the local-interior regime toward this limit.
+
+   The effect of unequal amplitudes can be isolated without changing generating
+
+dimension. Define the Gaussian scale mixture (GSM)
+
+
+                                           i.i.d.                           i.i.d.
+         𝑋𝑠(𝑑) = 𝑆 𝑠 𝑍 𝑠(𝑑) ,       𝑍 𝑠(𝑑) ∼ N (0, I𝑑 ),            log 𝑆 𝑠 ∼ N (0, 𝜎𝑆2 ).
+
+
+Here 𝑆 𝑠 > 0 is the multiplicative amplitude of one observation, I𝑑 is the 𝑑 × 𝑑 identity
+
+matrix, and 𝜎𝑆 is the standard deviation of log amplitude. The amplitude and Gaussian
+
+sequences are mutually independent.
+
+   Unequal amplitudes preserve ID but affect neighbor selection. In a Gaussian scale
+
+mixture, the pairwise distance obeys
+
+                                                           𝑝
+                                𝑑 −1 ∥ 𝑋 𝑗(𝑑) − 𝑋𝑖(𝑑) ∥ 22 −
+                                                           → 𝑆𝑖2 + 𝑆 2𝑗 .
+
+
+For a fixed center, 𝑆𝑖2 is common to all limiting distances, so lower-amplitude obser-
+
+vations tend to be closer and are preferentially selected as neighbors.
+
+   Proposition 2 gives the angular consequence. When both selected-neighbor am-
+
+plitudes are below the center amplitude, the numerator in Eq. (8) remains 𝑆𝑖2 , while
+
+each denominator factor is below 2𝑆𝑖2 . The limiting cosine therefore exceeds 1/2, and
+
+the angle falls below 𝜋/3.
+
+   Figure 2 tests the finite-sample transition between the local-interior and shell
+
+regimes and then isolates the location shift from sample-amplitude heterogeneity. The
+
+
+                                                    14
+                  (a) homogeneous amplitudes                              (b) heterogeneous amplitudes, d = 70
+                  π/2                                                     π/2
+            1.5                                                     1.5
+
+                  π/3                                                     π/3
+ ν̂ (rad)
+
+
+
+
+                                                         ν̂ (rad)
+            1.0                                                     1.0
+
+
+            0.5                                                     0.5
+                  2          10       50           400                      0.0       0.1     0.2    0.3
+                      ball dimension d (log scale)                                log-amplitude spread σS
+
+
+Figure 2: Finite-sample checks of the two angular regimes (𝑁 =2500, 𝑘=10). Dashed lines mark the
+local-interior mean 𝜋/2 and homogeneous-shell limit 𝜋/3. (a) Uniform 𝑑-balls as 𝑑 varies at fixed sample
+size. (b) Gaussian scale mixtures at 𝑑 = 70 as the log-amplitude spread 𝜎𝑆 varies over the grid of the
+Section 4.4.1 sweep, the range anchored by the image classes.
+
+
+sampled mean direction leaves 𝜋/2 and approaches 𝜋/3 as 𝑑 grows, and falls below
+
+𝜋/3 as 𝜎𝑆 grows. At the center level, a larger centered norm goes with a smaller per-
+
+center mean direction: in Eq. (8) with 𝑅𝑠 = 𝑆 𝑠 , raising the center amplitude relative to
+
+its selected neighbors raises the limiting cosine and lowers the angle. Supplementary
+
+Figure S1 shows this monotone decrease across centered-norm deciles.
+
+            Because physical neighbor angles occupy [0, 𝜋] whereas DANCo uses a circular
+
+von Mises approximation, Supplementary Section S1.4 contrasts the exact locally
+
+symmetric angle density with the movable-location von Mises family and then assesses
+
+separately fitted pooled von Mises laws (Figure S2). Their mass outside [0, 𝜋] is at
+
+most 5.0 × 10−8 , and the fitted laws pass descriptive checks of fit.
+
+            The two regimes distinguish a dimension-bearing concentration from a location
+
+that also responds to geometry and amplitude. This motivates profiling angular location
+
+while retaining concentration matching, recognizing that concentration may itself be
+
+affected by the changed geometry. Following Eq. (6), let 𝛿 ∈ [0, 2𝜋) rotate the
+
+reference mean direction. Comparing the von Mises laws modulo this rotation gives
+
+
+                             prof                               ref       ref 
+                            Δang (𝑚) = inf KL 𝑞(·; 𝜈, ˆ ∥ 𝑞(·; 𝜈𝑚
+                                                   ˆ 𝜏)             + 𝛿, 𝜏𝑚  ) .                            (9)
+                                           𝛿
+
+
+
+
+                                                         15
+Aligning their mean directions gives
+
+                                       𝐼0 (𝜏𝑚ref )
+                        prof                                      ref
+                      Δang (𝑚) = log               + 𝐴( 𝜏)
+                                                        ˆ ( 𝜏ˆ − 𝜏𝑚   ).            (10)
+                                        𝐼0 ( 𝜏)
+                                             ˆ
+
+Supplementary Section S1.3 derives the profiled infimum in Eq. (9) and its closed form
+
+in Eq. (10). The profiled angular discrepancy therefore depends on the observed an-
+
+gular statistics only through 𝜏;
+                              ˆ it equals the concentration term of Eq. (4), so profiling
+
+removes the angular-location penalty exactly. When concentration remains informa-
+
+tive, this removes the influence of location mismatch while preserving concentration
+
+evidence. Full matching retains additional information when data and references share
+
+the same finite-sample geometry.
+
+
+3.5. Numerical evaluation
+
+   The four variants share the neighbor geometry, reference construction, and curve-
+
+minimization procedure. Stable angular evaluation carries this comparison into the
+
+candidate range of learned representations. At reference sample size 500, ordinary
+
+Bessel evaluation first overflows at candidate 𝑚 = 278, and the boundary is similar
+
+across the precomputed sample sizes 450–700. Exponentially scaled Bessel evaluation
+
+keeps both angular objectives finite through the CNN study’s bound 𝑚 max = 400.
+
+Supplementary Section S2.3 defines the scaled identities and reports the observed
+
+overflow boundary.
+
+   To avoid regenerating one reference per candidate for every CNN layer, we pre-
+
+compute FastDANCo-style smoothing-spline reference surfaces. One offline procedure
+
+builds a surface for each distance statistic on a shared simulation grid (Supplemen-
+
+tary Section S3.7). Supplementary Algorithm S1 (Section S2.1) states the complete
+
+estimator, including our chosen low-dimension rule: a preliminary distance fit at most
+
+five is returned directly, without reference matching. Section S2.4 maps each com-
+
+putational measurement to its timed steps. Supplementary Figures S3–S4 show the
+
+
+
+                                            16
+overflow boundary and workload-aligned central-processing-unit (CPU) and graphics-
+
+processing-unit (GPU) scaling. At sample size 500, ambient dimension 400, and ten
+
+neighbors, complete evaluation through candidate 400 with precomputed references
+
+finishes in well under one second on both devices.
+
+
+4. Experiments
+
+   The experiments examine when the two geometric components support a common
+
+estimate and how targeted changes improve calibration. Clean manifolds test accuracy
+
+and component agreement; neighborhood-relative noise tests the distance statistic;
+
+and a known-𝑑 GSM tests profiling under sample-amplitude heterogeneity. Natural
+
+images and CNN representations, with candidates through 400, then show what the
+
+component statistics reveal when generating dimension is unknown.
+
+
+4.1. Experimental design and metrics
+
+Estimators and datasets. We combine MiND or Gride distance calibration with Full
+
+or Profiled angular calibration. Distance-only and angle-only objectives isolate the
+
+contribution of each component. Calibrated objectives use 𝑘 = 10 except where a
+
+sweep varies it; Gride uses neighbor orders (𝑘 1 , 𝑘 2 ) = (5, 10). The primary bench-
+
+mark uses the 24 manifolds returned by scikit-dimension’s BenchmarkManifolds
+
+generator, whose suite extends the benchmark introduced by Campadelli et al. [5, 21].
+
+   The nine reference estimators are the Levina–Bickel maximum-likelihood esti-
+
+mator (MLE) [16], TWO-NN, computed throughout with its original discarded-tail
+
+fit [12], local principal component analysis (lPCA) [14], expected simplex skewness
+
+(ESS) [17], manifold-adaptive dimension estimation (MADA) [35], the tight local es-
+
+timator (TLE) [36], correlation dimension (CorrInt) [15], MiND maximum likelihood
+
+(MiND–ML) [18], and Fisher separability (FisherS) [37].
+
+   For the primary benchmark over collection B, let 𝑑 𝑀 denote the generating ID of
+
+manifold 𝑀 ∈ B and let 𝑑ˆ𝑀 denote its estimate averaged over replicates. We report
+
+
+                                         17
+mean percentage error (MPE) [18],
+
+                                      100 ∑︁ | 𝑑ˆ𝑀 − 𝑑 𝑀 |
+                            MPE =                          .
+                                      |B| 𝑀 ∈ B   𝑑𝑀
+
+The sensitivity, component, noise, and GSM comparisons compute MPE within each
+
+replicate before summarizing across replicates. Supplementary Section S3 defines the
+
+datasets, comparison units, and aggregation rules for every experiment, and Table S1
+
+reports the sample-size-specific angular reference ranges.
+
+
+Controlled data models. The amplitude experiment uses the GSM defined in Sec-
+
+tion 3.4. We set 𝑑 = 70, embed each sample in 𝐷 = 100 so that the candidate search
+
+covers 1–100, and evaluate 𝜎𝑆 ∈ {0, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35} over 30 replicates,
+
+a range that brackets the centered-norm variation of the 17 image classes surveyed in
+
+Supplementary Table S9; configurations share data and reference replicates (Supple-
+
+mentary Section S3.1).
+
+   Profiling tests whether removing the angular-location penalty improves the com-
+
+bined estimate. A second control divides each observation by its known simulated
+
+amplitude, 𝑋𝑖 /𝑆𝑖 = 𝑍𝑖 . Within each replicate, this operation holds 𝑍𝑖 , the generating
+
+dimension, and the reference replicate fixed. Multiplicative amplitude is the only
+
+generating factor removed, so recovery of Full calibration identifies its effect within
+
+the GSM.
+
+   For additive noise, let 𝑋𝑖(0) ∈ R𝐷 be the clean observation and let 𝑟 𝑖,10
+                                                                         (0)
+                                                                              be its
+
+Euclidean distance to the tenth nearest neighbor in the clean sample. Conditional on
+
+that sample, we observe
+
+
+                                                    i.i.d.
+                     𝑋𝑖obs = 𝑋𝑖(0) + 𝜀 𝑖 ,        𝜀𝑖 ∼ N (0, 𝜎𝜀2 I𝐷 ),
+
+
+
+
+                                             18
+where I𝐷 is the 𝐷 × 𝐷 identity matrix. We set the coordinate scale by
+
+                                                      (0)
+                                            median𝑖 𝑟 𝑖,10
+                                   𝜎𝜀 = 𝜂      √           .                              (11)
+                                                 2𝐷
+
+The dimensionless parameter 𝜂 measures noise relative to local neighbor spacing.
+
+Conditional on the clean sample, two independent noise vectors satisfy
+
+
+                                                              (0) 2
+                      E∥𝜀𝑖 − 𝜀 𝑗 ∥ 22 = 2𝐷𝜎𝜀2 = 𝜂2 {median𝑖 𝑟 𝑖,10 } .
+
+                                                                                  √
+Thus the median spacing adapts the perturbation to the dataset’s global scale, and 2𝐷
+
+removes the ambient-dimensional growth of the root-mean-square noise displacement.
+
+At 𝜂 = 1, that displacement equals the median clean tenth-neighbor distance. We
+
+measure error against the pre-noise generating dimension (Supplementary Section
+
+S3.4).
+
+   The image experiments assess calibration sensitivity through two descriptive nor-
+
+malizations. Centered radial normalization first sets 𝑐 𝑖 = 𝑥𝑖 − 𝑥¯ within a class and
+
+maps every nonzero 𝑐 𝑖 to 𝑐 𝑖 /∥𝑐 𝑖 ∥ 2 . Per-image contrast normalization maps coordinate
+
+𝑗 to 𝑥 𝑖′ 𝑗 = (𝑥𝑖 𝑗 − 𝑥¯𝑖 )/𝑠𝑖 , where 𝑥¯𝑖 and 𝑠𝑖 are that image’s coordinate mean and standard
+
+deviation. Both transformations reduce sample-amplitude variation and support the
+
+reference-mismatch interpretation of Section 4.4.2 (Supplementary Section S3.6).
+
+
+4.2. Clean-manifold accuracy
+
+   The clean benchmark establishes the accuracy of the joint calibration on which the
+
+componentwise formulation builds. Under the shared twenty-replicate design, MiND–
+
+Full has the lowest MPE in Table 1: 6.33%, followed by TWO-NN at 11.12% and
+
+MiND–ML at 13.58%. This agrees with earlier comparisons placing DANCo among
+
+the strongest ID estimators [5, 11]. MiND–Full’s error rate, the fraction of individual
+
+estimates with more than 10% relative error, is 0.138. Accuracy, cost, and reliability
+
+distinguish the alternatives: ESS reaches 20.20% MPE at a median 101.61 seconds per
+
+
+                                             19
+Table 1: Ten intrinsic-dimension estimators on 24 manifolds with 20 data replicates per estimator. MPE
+averages each manifold’s estimate over its successful replicates and then averages the relative errors over
+the 24 manifolds; failures count as errors in the error rate. The last column reports the median time in
+seconds to estimate one dataset on an Intel i7-10700 CPU, and MiND–Full excludes the shared reference
+construction.
+
+    Estimator                       MPE (%)        > 10% error         failed     median time (s)
+    MiND–Full (DANCo)                     6.33              0.138           0                  0.03
+    TWO-NN                               11.12              0.442           0                  0.01
+    MiND–ML                              13.58              0.537           0                  0.06
+    MLE                                  18.84              0.596           0                  0.05
+    ESS                                  20.20              0.417           0                101.61
+    TLE                                  20.45              0.667           0                  0.51
+    MADA                                 28.71              0.594           0                  0.42
+    FisherS                              37.97              0.613          19                  0.44
+    CorrInt                              38.19              0.660           0                  0.08
+    lPCA                                 49.81              0.625           0                < 0.01
+
+
+dataset, and FisherS returns 19 failed cells. Supplementary Section S4.1, Table S2, and
+
+Figure S5 report the per-manifold estimates and signed-error curves. These distinguish
+
+MiND–Full’s high-dimensional accuracy from its remaining geometry-specific errors.
+
+Supplementary Section S4.3 and Table S4 record the neighborhood and sample-size
+
+sweeps specified in Section S3.3. There the two MiND objectives remain the top
+
+pair of the five compared methods across neighborhood sizes, and every calibrated
+
+configuration improves with sample size.
+
+    A separate comparison isolates the contribution of combining distance and angle
+
+on matched clean geometry. It retains the 14 manifolds on which all eight objectives
+
+are defined; the preliminary-distance cutoff excludes the other ten (Supplementary
+
+Section S3.2). With five shared reference replicates for every objective, MiND–Full
+
+has the lowest observed mean MPE at 8.6 ± 0.7%, below MiND distance-only at
+
+10.1 ± 0.2% and Full angle-only at 15.9 ± 0.7%. MiND–Profiled also improves on
+
+both corresponding components: its MPE is 9.7 ± 0.2%, below MiND distance-only
+
+at 10.1 ± 0.2% and Profiled angle-only at 12.2 ± 0.3%. Both combined objectives
+
+therefore have lower observed mean error than their corresponding component-only
+
+
+
+                                                   20
+                                        MiND–Full
+                             25         Gride–Full
+                                        MiND–Profiled
+
+
+
+                   MPE (%)
+                             20
+                                        Gride–Profiled
+                             15
+
+                             10
+
+
+                                  0.0   0.1             0.2          0.3        0.4
+                                              relative noise level η
+
+
+Figure 3: MPE over 24 manifolds under Gaussian noise scaled by Eq. (11) (ten data replicates; bands show
+one standard deviation). MiND–Full has lower clean-data error; Gride–Full has lower error for 𝜂 ≥ 0.1.
+Color, line style, and marker jointly identify each method.
+
+
+objectives, with MiND–Full lowest on this comparison set.
+
+    The combined signed errors in Table S3 are each closer to the distance-only values
+
+than to the angle-only values. Equal objective weights need not imply equal local
+
+influence: a local quadratic analysis of the sampled reference curves supports stronger
+
+distance influence for the Profiled objectives. Supplementary Section S4.2 and Table
+
+S3 give the derivation, the numerical diagnostics, and all eight objectives.
+
+
+4.3. Robustness to neighborhood-relative noise
+
+    The noise experiment tests the practical consequence of replacing the first neighbor
+
+with larger orders. Figure 3 compares the combined estimates as noise increases
+
+relative to neighborhood spacing.
+
+    Figure 3 identifies the conditions favoring the larger-order ratio. MiND–Full
+
+leads on clean data (6.75% versus 9.39% MPE under this ten-replicate design). At
+
+𝜂 = 0.1, Gride–Full reaches 9.16%, compared with 11.38% for MiND–Full; at 𝜂 = 0.4,
+
+the corresponding errors are 17.64% and 27.74%. The larger-order ratio improves
+
+accuracy for 𝜂 ≥ 0.1 within the evaluated range. Supplementary Section S4.4 and
+
+Table S5 report the full comparison, in which both Gride-based combined objectives
+
+degrade more slowly with 𝜂 than their MiND counterparts.
+
+
+                                                   21
+4.4. Angular-reference mismatch
+
+    We examine the angular component first in a setting with known generating dimen-
+
+sion, where the GSM isolates amplitude variation, and then on natural images. This
+
+separates a controlled accuracy test from the descriptive question of how reference
+
+mismatch appears in observed data.
+
+
+4.4.1. Known-dimension Gaussian scale mixture
+
+    The GSM connects the accuracy benefit of angular profiling to its removal of the
+
+location penalty (Figure 4). At 𝜎𝑆 = 0.25, the focal level inside the image-class range,
+
+MiND–Full estimates 22.80 ± 1.76 and has 67.43% MPE, whereas MiND–Profiled
+
+estimates 66.67 ± 1.81 (4.76% MPE) and MiND distance-only 71.20 ± 1.75 (2.48%
+
+MPE) against the generating dimension 70. Profiling leaves the distance objective
+
+unchanged and removes the angular-location penalty, returning the combined estimate
+
+to the distance evidence.
+
+    The effect follows the penalty in Section 3.1: the observed mean direction,
+
+0.832±0.014, has no candidate reference mean direction below it. Over five focal-level
+
+replicates, the angular-location penalty rises across nearly all candidates (Supplemen-
+
+tary Section S4.5). This penalty shifts the joint minimum to 22.80; profiling removes
+
+it exactly.
+
+    The sweep establishes the extent of this benefit. Across the seven tested levels,
+
+MiND–Full falls monotonically from 71.90 at 𝜎𝑆 = 0 to 18.08 at 𝜎𝑆 = 0.35, while
+
+MiND–Profiled stays near the generating dimension with means between 62.47 and
+
+73.70. Profiling therefore brings the combined estimate closer to the generating
+
+dimension at every nonzero amplitude level (Supplementary Sections S3.5 and S4.5
+
+and Tables S6–S7).
+
+    The amplitude-removal control at 𝜎𝑆 = 0.25 moves the mean direction from
+
+0.832 ± 0.014 to 1.137 ± 0.003 radians and MiND–Full from 22.80 ± 1.76 to 71.90 ±
+
+3.30, recovering the amplitude-free 𝜎𝑆 = 0 sample exactly; within the GSM, Full
+
+
+                                          22
+                     Gaussian scale mixture, d = 70 in D = 100, 30 replicates
+
+                80
+
+
+                60
+ estimated ID
+
+
+
+
+                40
+
+
+                20
+
+
+                 0
+                     0.00       0.05        0.10        0.15       0.20         0.25   0.30      0.35
+                                                    log-amplitude spread σS
+
+
+                        image-class range (Table S9)            MiND–Full
+                        true d = 70                             MiND–Profiled
+                        MiND distance-only                      MiND–Full, known amplitudes removed
+
+
+Figure 4: Gaussian scale-mixture sweep at 𝑑 = 70 embedded in 𝐷 = 100 over 30 data replicates. The
+log-amplitude standard deviation is 𝜎𝑆 ; 𝑆𝑖 > 0 is the simulated amplitude in 𝑋𝑖 = 𝑆𝑖 𝑍𝑖 , and 𝑍𝑖 is a
+standard Gaussian vector before embedding. Curves show the mean estimated ID with bands of ± one
+standard deviation; the shaded band approximately maps the centered-norm variation of the 17 surveyed
+image classes (Supplementary Table S9) onto the log-amplitude spread; the diamond is MiND–Full after
+the known-amplitude control 𝑋𝑖 /𝑆𝑖 = 𝑍𝑖 at 𝜎𝑆 = 0.25; the dashed line marks the generating dimension.
+
+
+underestimation is thus attributable to the amplitudes alone.
+
+
+4.4.2. Natural images and normalization
+
+                Natural images test whether the angular signature identified in the GSM is also
+
+visible in data with uncontrolled amplitude structure. Gaussian scale mixtures model
+
+multiscale image coefficients [38], motivating images as an observational counterpart
+
+to the controlled study.
+
+                Table 2 reports all four variants on the six raw image classes. MNIST lies inside
+
+its sample-size-specific reference range, its 𝜈ˆ exceeds one, and the four variants agree:
+
+MiND–Full and Gride–Full agree to the reported precision, and the reported means of
+
+the two Profiled objectives agree within 0.6 dimensions (20.20 versus 20.00 for digit
+
+3 and 14.80 versus 14.20 for digit 7). CIFAR-10 and ImageNet have mean directions
+
+
+                                                          23
+Table 2: Estimated ID and angular statistics on six raw image classes. Calibrated estimates are means over
+five reference replicates; 𝜈ˆ is the observed mean direction in radians and 𝜏ˆ is the dimensionless observed
+von Mises concentration. Reference-replicate standard deviations reach 2.1 for the Profiled objectives and
+4.6 for the Full objectives.
+
+                                    Full              Profiled
+   Dataset                    MiND Gride MiND Gride TWO-NN                                  𝜈ˆ       𝜏ˆ
+   MNIST digit 3               20.39     20.39     20.20     20.00           14.88    1.166 41.3
+   MNIST digit 7               14.40     14.40     14.80     14.20           12.19    1.157 27.7
+   CIFAR-10 bird               18.78     15.80     34.00     33.20           25.55    0.898 63.2
+   CIFAR-10 cat                21.21     17.60     32.80     32.20           26.11    0.946 56.8
+   ImageNet koala              24.86     20.71     45.00     38.80           31.32    0.934 90.1
+   ImageNet butterfly          28.07     22.20     58.80     54.60           36.11    0.915 134.6
+
+
+below their reference ranges and below one, with larger Full–Profiled separations, and
+
+the two Full estimates separate (18.78 versus 15.80 on CIFAR-10 bird). This pattern is
+
+consistent with angular-location mismatch, which also makes the Full estimate depend
+
+on the distance statistic. Gride–Profiled combines the generic-order distance statistic
+
+with angular-location profiling and returns the lowest profiled estimate on these four
+
+CIFAR-10 and ImageNet classes.
+
+    The Profiled estimates, larger than the raw MiND–Full and TWO-NN values, lie
+
+within the range reported for image data by other ID approaches. Earlier pixel-space
+
+studies report estimates on the tens-of-dimensions scale: Pope et al. [24] give dataset-
+
+level MLE ranges of 7–13 for MNIST, 13–26 for CIFAR-10, and 26–43 for ImageNet
+
+across neighborhood sizes, and Ansuini et al. [2] report class-level ImageNet estimates
+
+on that scale, although the estimators and sampling units differ from ours. More recent
+
+diffusion-based estimators give substantially larger values: for MNIST, Stanczuk et
+
+al. [26] report 66–152 per digit, compared with 13.3–14.1 from dataset-level MLE at
+
+the neighborhood sizes considered in that study, with average diffusion-based estimates
+
+near 130 in related work [25]. Estimates above classical local-MLE values are therefore
+
+not by themselves anomalous.
+
+    The normalization comparison shows how angular-location calibration affects the
+
+
+
+                                                    24
+reported estimates. For ImageNet koala, contrast normalization moves 𝜈ˆ from 0.934 to
+
+1.080 and the MiND–Full/MiND–Profiled estimates from 24.9/45.0 to 72.2/70.0; the
+
+shift narrows the Full–Profiled gap from 20.1 to 2.2, consistent with angular-location
+
+mismatch contributing to the raw-image discrepancy. On the same raw class, Gride–
+
+Profiled gives 38.80, which is 6.2 dimensions below MiND–Profiled, showing the
+
+additional effect of the distance-statistic choice within the profiled objective. Sup-
+
+plementary Section S3.6 and Table S1 report the reference ranges; Supplementary
+
+Section S4.6, Tables S8–S9, and Figures S6–S7 report the normalization controls,
+
+component curves, per-center relation, and additional classes. Normalization moves
+
+angular location toward the reference range and narrows the Full–Profiled separation
+
+in each CIFAR-10 and ImageNet class of Table S8.
+
+
+4.5. Layer-wise profiles in convolutional neural networks
+
+   Layer-wise analysis extends the calibration question from pixel-space images to
+
+learned representations. Prior work traces ID through network depth [2]; here the can-
+
+didate range reaches the hundreds. Gride–Profiled suits this setting: Section 4.3 found
+
+the generic-order ratio more robust to noise, and the layer mean directions reported be-
+
+low fall under the reference mean-direction range, the regime that profiling addresses.
+
+The CNN study evaluates AlexNet [39], VGG-16 [40], and ResNet-18/34 [41] on
+
+subsamples of 500 images. At each checkpoint, Gride–Profiled, TWO-NN, and MLE
+
+share the activation matrix after exact-duplicate rows are removed; Gride–Profiled
+
+evaluates the precomputed Gride reference surface of Section 3.5 at the resulting sam-
+
+ple size. Curves are plotted against relative depth, which places every network on a
+
+common input-to-output interval (Supplementary Section S3.7).
+
+   The three estimators share a rise-and-fall profile: Gride–Profiled, TWO-NN, and
+
+MLE rise through intermediate layers and decline toward the output (Figure 5). Among
+
+the sampled checkpoints, the Gride–Profiled peak falls at the second max-pooling
+
+checkpoint of AlexNet and VGG-16, at 22.2–23.5% relative depth, and the second
+
+
+                                          25
+                 alexnet                                       vgg16
+           400                                           400
+           200                                           200
+      ID   100                                           100
+
+
+
+
+                                                    ID
+            50                                            50
+           20                                            20
+           10                                            10
+                 0.0              0.5         1.0              0.0              0.5         1.0
+                            relative depth                                relative depth
+                 resnet18                                      resnet34
+           400                                           400
+           200                                           200
+           100                                           100
+      ID
+
+
+
+
+                                                    ID
+            50                                            50
+           20                                            20
+           10                                            10
+                 0.0              0.5         1.0              0.0              0.5         1.0
+                            relative depth                                relative depth
+                            Gride–Profiled               TWO-NN                      MLE
+
+
+Figure 5: Layer-wise ID profiles on identical activations in four pretrained CNNs. Gride–Profiled uses
+𝑘 = 10 and precomputed smoothing-spline references through candidate 400. Lines show the median over
+seven ImageNet categories and three 500-image subsamples; bands show their interquartile range. Color,
+line style, and marker jointly identify each estimator. The ID axis is logarithmic.
+
+
+residual stage of ResNet-18 and ResNet-34, at 42.9–47.4%. These checkpoints place
+
+the peak before the later pooling or residual stages. This early peak is consistent
+
+with near-one neighbor-distance ratios inflating the estimate in learned representa-
+
+tions [30]. Further downsampling coincides with descending estimates toward the
+
+output, the same early-peak-then-compression course that Ansuini et al. report for
+
+TWO-NN [2]. The shared rise-and-fall shape recurs across categories, subsamples,
+
+and the three estimators, which supports interpreting profile shape and calibration
+
+sensitivity (Supplementary Section S4.7).
+
+    In every architecture, the largest median paired Full–Profiled separation sits at
+
+the Profiled peak, where 𝜈ˆ lies between 0.80 and 0.92: Gride–Full reports 17–37
+
+while Gride–Profiled reports 115–248, a median paired difference of −100 to −214
+
+dimensions (Table S10). Layer medians of 𝜈ˆ span 0.780–1.106 and stay below the
+
+CNN reference surface’s mean-direction range (Supplementary Section S3.7). They
+
+
+                                                 26
+reach 0.78–0.87 at the first pooling checkpoint of each network and rise to 1.04–1.11
+
+toward the output, where the two objectives converge (Table S10). Supplementary
+
+Section S4.7 and Table S10 report the peak layer, 𝜈,
+                                                  ˆ Gride–Full, Gride–Profiled, and
+
+their difference for each architecture.
+
+
+5. Discussion and conclusion
+
+   On clean benchmarks, joint calibration is among the state of the art (lowest MPE
+
+of ten estimators, Table 1), and MiND–Full (8.6 ± 0.7% MPE) improves on both
+
+components on 14 manifolds. Componentwise calibration keeps this strength and ad-
+
+dresses each practical condition: neighborhood-relative noise by generic-order ratios,
+
+sample-amplitude heterogeneity by profiling, and high candidate dimension by scaled
+
+Bessel evaluation. In the thin-shell regime of high dimension, amplitude shifts angular
+
+location, so profiling serves the third condition as well.
+
+   For distance calibration, the closed-form Gride KL admits the generic-order ratio,
+
+which trades a clean-data margin for improved accuracy at every evaluated level
+
+𝜂 ≥ 0.1.
+
+   For angular calibration, the local-interior and thin-shell regimes distinguish the
+
+dimension-bearing concentration from a mean direction affected by geometry and
+
+amplitude. Under amplitude heterogeneity (𝜎𝑆 = 0.25), the angular-location penalty
+
+drives MiND–Full to 22.80 ± 1.76 against a generating dimension of 70. Profiling
+
+removes that penalty and returns the estimate to 66.67 ± 1.81; dividing out the known
+
+simulated amplitudes recovers the amplitude-free sample and its Full calibration. Full
+
+and Profiled therefore have complementary uses: retain angular location when refer-
+
+ences match the finite-sample geometry, and align it when location mismatch obscures
+
+informative concentration. Making these choices explicit lets the distance statistic and
+
+angular discrepancy be assessed separately within one combined estimate.
+
+   The image and CNN studies, reaching candidates to 400, turn this structure into
+
+
+
+                                           27
+a tool for learned representations. On CIFAR-10 and ImageNet, the Full–Profiled
+
+separation accompanies an angular location below the reference range, and amplitude-
+
+reducing normalization moves the location toward that range and narrows the separa-
+
+tion. Across four CNNs, the paired Full–Profiled comparison locates the layers most
+
+sensitive to angular-location calibration: the largest median separation occurs at the
+
+Profiled peak, where Full estimates are 100–214 dimensions lower.
+
+    The component structure also suggests extensions through dependence-aware
+
+weights, adaptive neighbor orders, and amplitude-aware angular references. More
+
+generally, other statistics can enter the framework once a dimension-indexed reference
+
+law and discrepancy are available. By exposing the statistical choices within geomet-
+
+ric calibration, the framework provides a basis for such extensions and for adapting
+
+estimates to practical data.
+
+
+CRediT authorship contribution statement
+
+    Chih-Hsuan Huang: Conceptualization, Methodology, Software, Investigation,
+
+Writing – original draft. Chih-Wei Chen: Supervision, Funding acquisition, Writ-
+
+ing – review & editing. Szu-Chi Chung: Conceptualization, Supervision, Funding
+
+acquisition, Writing – review & editing.
+
+
+Funding
+
+    This work was supported by the National Science and Technology Council (NSTC),
+
+Taiwan, under grants NSTC 114-2118-M-110-002-MY3 and NSTC 113-2115-M-110-
+
+009-MY2. The funder had no role in the study design, data collection and analysis,
+
+interpretation of the results, preparation of the manuscript, or the decision to submit
+
+the article for publication.
+
+
+
+
+                                           28
+Declaration of competing interest
+
+   The authors declare that they have no competing financial interests or personal
+
+relationships that could have influenced the work reported in this paper.
+
+
+Declaration of generative AI and AI-assisted technologies
+
+in the manuscript preparation process
+
+   During the preparation of this work, the authors used Claude (Anthropic) and
+
+OpenAI Codex for language editing, for consistency and mathematical checking of the
+
+text, and for manuscript and code organization. After using these tools, the authors
+
+reviewed and edited the content as needed and take full responsibility for the content
+
+of the published article.
+
+
+Data and code availability
+
+   The code supporting this study will be made publicly available on Zenodo upon
+
+acceptance of the manuscript. The datasets used in the experiments are publicly avail-
+
+able. Synthetic benchmark datasets were generated using scikit-dimension [21];
+
+MNIST [42] and CIFAR-10 [43] were accessed through torchvision; and the Ima-
+
+geNet data [44] were obtained from the single-object subsets provided by [2]. Access
+
+instructions and processed results will be included in the Zenodo archive. Raw images
+
+are not redistributed.
+
+
+References
+
+ [1] F. Camastra, A. Staiano, Intrinsic dimension estimation: Advances and open
+
+     problems, Information Sciences 328 (2016) 26–41. doi:10.1016/j.ins.
+
+     2015.08.029.
+
+
+
+
+                                          29
+ [2] A. Ansuini, A. Laio, J. H. Macke, D. Zoccolan, Intrinsic dimension of data
+
+     representations in deep neural networks, in: Advances in Neural Information
+
+     Processing Systems, Vol. 32, 2019, pp. 6111–6122.
+
+ [3] C. Ceruti, S. Bassis, A. Rozza, G. Lombardi, E. Casiraghi, P. Campadelli,
+
+     DANCo: An intrinsic dimensionality estimator exploiting angle and norm con-
+
+     centration, Pattern Recognition 47 (8) (2014) 2569–2581. doi:10.1016/j.
+
+     patcog.2014.02.013.
+
+ [4] E. Thordsen, E. Schubert, ABID: Angle based intrinsic dimensionality — theory
+
+     and analysis, Information Systems 108 (2022) 101989. doi:10.1016/j.is.
+
+     2022.101989.
+
+ [5] P. Campadelli, E. Casiraghi, C. Ceruti, A. Rozza, Intrinsic dimension estimation:
+
+     Relevant techniques and a benchmark framework, Mathematical Problems in
+
+     Engineering 2015 (2015) 759567. doi:10.1155/2015/759567.
+
+ [6] Z. Benkő, M. Stippinger, R. Rehus, A. Bencze, D. Fabó, B. Hajnal, L. G.
+
+     Eröss, A. Telcs, Z. Somogyvári, Manifold-adaptive dimension estimation revis-
+
+     ited, PeerJ Computer Science 8 (2022) e790. doi:10.7717/peerj-cs.790.
+
+ [7] H. Qiu, Y. Yang, S. Rezakhah, Intrinsic dimension estimation method based on
+
+     correlation dimension and kNN method, Knowledge-Based Systems 235 (2022)
+
+     107627. doi:10.1016/j.knosys.2021.107627.
+
+ [8] H. Qiu, Y. Yang, H. Pan, Underestimation modification for intrinsic dimension
+
+     estimation, Pattern Recognition 140 (2023) 109580. doi:10.1016/j.patcog.
+
+     2023.109580.
+
+ [9] J. A. D. Binnie, P. Dłotko, J. Harvey, J. Malinowski, K. M. Yim, A survey of
+
+     dimension estimation methods (2025). arXiv:2507.13887, doi:10.48550/
+
+     arXiv.2507.13887.
+
+[10] F. Tosti Guerra, A. Napoletano, A. Zaccaria, The intrinsic dimension of neural
+
+     network ensembles, Entropy 27 (4) (2025) 440. doi:10.3390/e27040440.
+
+
+                                         30
+[11] F. Denti, D. Doimo, A. Laio, A. Mira, The generalized ratios intrinsic di-
+
+     mension estimator, Scientific Reports 12 (1) (2022) 20005. doi:10.1038/
+
+     s41598-022-20991-1.
+
+[12] E. Facco, M. d’Errico, A. Rodriguez, A. Laio, Estimating the intrinsic dimension
+
+     of datasets by a minimal neighborhood information, Scientific Reports 7 (2017)
+
+     12140. doi:10.1038/s41598-017-11873-y.
+
+[13] M. Gomtsyan, N. Mokrov, M. Panov, Y. Yanovich, Geometry-aware maximum
+
+     likelihood estimation of intrinsic dimension, in: Proceedings of the Eleventh
+
+     Asian Conference on Machine Learning, Vol. 101 of Proceedings of Machine
+
+     Learning Research, PMLR, 2019, pp. 1126–1141.
+
+[14] K. Fukunaga, D. R. Olsen, An algorithm for finding intrinsic dimensionality
+
+     of data, IEEE Transactions on Computers C-20 (2) (1971) 176–183. doi:
+
+     10.1109/T-C.1971.223208.
+
+[15] P. Grassberger, I. Procaccia, Measuring the strangeness of strange attractors,
+
+     Physica D: Nonlinear Phenomena 9 (1–2) (1983) 189–208. doi:10.1016/
+
+     0167-2789(83)90298-1.
+
+[16] E. Levina, P. J. Bickel, Maximum likelihood estimation of intrinsic dimension,
+
+     in: Advances in Neural Information Processing Systems, Vol. 17, 2004, pp.
+
+     777–784.
+
+[17] K. Johnsson, C. Soneson, M. Fontes, Low bias local intrinsic dimension esti-
+
+     mation from expected simplex skewness, IEEE Transactions on Pattern Analysis
+
+     and Machine Intelligence 37 (1) (2015) 196–202. doi:10.1109/TPAMI.2014.
+
+     2343220.
+
+[18] G. Lombardi, A. Rozza, C. Ceruti, E. Casiraghi, P. Campadelli, Minimum neigh-
+
+     bor distance estimators of intrinsic dimension, in: Machine Learning and Knowl-
+
+     edge Discovery in Databases (ECML PKDD), Springer, 2011, pp. 374–389.
+
+     doi:10.1007/978-3-642-23783-6_24.
+
+
+                                         31
+[19] Q. Wang, S. R. Kulkarni, S. Verdú, A nearest-neighbor approach to estimating
+
+     divergence between continuous random vectors, in: 2006 IEEE International
+
+     Symposium on Information Theory, 2006, pp. 242–246. doi:10.1109/ISIT.
+
+     2006.261842.
+
+[20] E.-J. Ong, O. Bobrowski, G. Reinert, P. Skraba, A universal nearest-neighbor
+
+     estimator for intrinsic dimensionality (2026). arXiv:2603.10493, doi:10.
+
+     48550/arXiv.2603.10493.
+
+[21] J. Bac, E. M. Mirkes, A. N. Gorban, I. Tyukin, A. Zinovyev, Scikit-dimension: A
+
+     Python package for intrinsic dimension estimation, Entropy 23 (10) (2021) 1368.
+
+     doi:10.3390/e23101368.
+
+[22] A. Glielmo, I. Macocco, D. Doimo, M. Carli, C. Zeni, R. Wild, M. d’Errico,
+
+     A. Rodriguez, A. Laio, DADApy: Distance-based analysis of data-manifolds
+
+     in Python, Patterns 3 (10) (2022) 100589. doi:10.1016/j.patter.2022.
+
+     100589.
+
+[23] F. Denti, intRinsic: An R package for model-based estimation of the intrinsic
+
+     dimension of a dataset, Journal of Statistical Software 106 (9) (2023) 1–45.
+
+     doi:10.18637/jss.v106.i09.
+
+[24] P. Pope, C. Zhu, A. Abdelkader, M. Goldblum, T. Goldstein, The intrinsic di-
+
+     mension of images and its impact on learning, in: International Conference on
+
+     Learning Representations (ICLR), 2021.
+
+[25] H. Kamkari, B. L. Ross, R. Hosseinzadeh, J. C. Cresswell, G. Loaiza-Ganem, A
+
+     geometric view of data complexity: Efficient local intrinsic dimension estimation
+
+     with diffusion models, in: Advances in Neural Information Processing Systems,
+
+     Vol. 37, 2024, pp. 38307–38354. doi:10.52202/079017-1211.
+
+[26] J. P. Stanczuk, G. Batzolis, T. Deveney, C.-B. Schönlieb, Diffusion models encode
+
+     the intrinsic dimension of data manifolds, in: Proceedings of the 41st Interna-
+
+     tional Conference on Machine Learning, Vol. 235 of Proceedings of Machine
+
+
+                                         32
+     Learning Research, PMLR, 2024, pp. 46412–46440.
+
+[27] J. Choi, G. Hwang, H. Cho, M. Kang, Analyzing the latent space of GAN through
+
+     local dimension estimation for disentanglement evaluation, Pattern Recognition
+
+     157 (2025) 110914. doi:10.1016/j.patcog.2024.110914.
+
+[28] L. Valeriani, D. Doimo, F. Cuturello, A. Laio, A. Ansuini, A. Cazzaniga, The
+
+     geometry of hidden representations of large transformer models, in: Advances
+
+     in Neural Information Processing Systems, Vol. 36, 2023, pp. 51234–51252.
+
+     doi:10.52202/075280-2230.
+
+[29] C. Camboulin, D. Doimo, A. Glielmo, Understanding variational autoencoders
+
+     with intrinsic dimension and information imbalance, in: NeurIPS 2024 Workshop
+
+     on Unifying Representations in Neural Models (UniReps), 2024. arXiv:2411.
+
+     01978.
+
+[30] R. Schulte, D. Rügamer, Rethinking intrinsic dimension estimation in neural
+
+     representations, in: Proceedings of the 29th International Conference on Arti-
+
+     ficial Intelligence and Statistics, Vol. 300 of Proceedings of Machine Learning
+
+     Research, PMLR, 2026, pp. 10–18. arXiv:2604.20276.
+
+[31] N. I. Fisher, Statistical Analysis of Circular Data, Cambridge University Press,
+
+     Cambridge, 1993. doi:10.1017/CBO9780511564345.
+
+[32] A. P. N. Vo, S. Oraintara, T. T. Nguyen, Statistical image modeling using von
+
+     Mises distribution in the complex directional wavelet domain, in: 2008 IEEE
+
+     International Symposium on Circuits and Systems (ISCAS), 2008, pp. 2885–
+
+     2888. doi:10.1109/ISCAS.2008.4542060.
+
+[33] T. Cai, J. Fan, T. Jiang, Distributions of angles in random packing on spheres,
+
+     Journal of Machine Learning Research 14 (2013) 1837–1864.
+
+[34] P. Hall, J. S. Marron, A. Neeman, Geometric representation of high dimension,
+
+     low sample size data, Journal of the Royal Statistical Society: Series B 67 (3)
+
+     (2005) 427–444. doi:10.1111/j.1467-9868.2005.00510.x.
+
+
+                                         33
+[35] A. M. Farahmand, C. Szepesvári, J.-Y. Audibert, Manifold-adaptive dimension
+
+     estimation, in: Proceedings of the 24th International Conference on Machine
+
+     Learning (ICML), 2007, pp. 265–272. doi:10.1145/1273496.1273530.
+
+[36] L. Amsaleg, O. Chelly, M. E. Houle, K.-i. Kawarabayashi, M. Radovanović,
+
+     W. Treeratanajaru, Intrinsic dimensionality estimation within tight localities, in:
+
+     Proceedings of the 2019 SIAM International Conference on Data Mining, 2019,
+
+     pp. 181–189. doi:10.1137/1.9781611975673.21.
+
+[37] L. Albergante, J. Bac, A. Zinovyev, Estimating the effective dimension of large
+
+     biological datasets using Fisher separability analysis, in: 2019 International Joint
+
+     Conference on Neural Networks (IJCNN), 2019, pp. 1–8. doi:10.1109/IJCNN.
+
+     2019.8852450.
+
+[38] M. J. Wainwright, E. P. Simoncelli, Scale mixtures of Gaussians and the statistics
+
+     of natural images, in: Advances in Neural Information Processing Systems,
+
+     Vol. 12, 1999, pp. 855–861.
+
+[39] A. Krizhevsky, I. Sutskever, G. E. Hinton, ImageNet classification with deep
+
+     convolutional neural networks, in: Advances in Neural Information Processing
+
+     Systems, Vol. 25, 2012.
+
+[40] K. Simonyan, A. Zisserman, Very deep convolutional networks for large-scale
+
+     image recognition, in: International Conference on Learning Representations
+
+     (ICLR), 2015.
+
+[41] K. He, X. Zhang, S. Ren, J. Sun, Deep residual learning for image recognition, in:
+
+     IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2016,
+
+     pp. 770–778.
+
+[42] Y. LeCun, L. Bottou, Y. Bengio, P. Haffner, Gradient-based learning applied
+
+     to document recognition, Proceedings of the IEEE 86 (11) (1998) 2278–2324.
+
+     doi:10.1109/5.726791.
+
+[43] A. Krizhevsky, Learning multiple layers of features from tiny images, Tech. rep.,
+
+
+                                          34
+    University of Toronto (2009).
+
+[44] O. Russakovsky, J. Deng, H. Su, J. Krause, S. Satheesh, S. Ma, Z. Huang,
+
+    A. Karpathy, A. Khosla, M. Bernstein, A. C. Berg, L. Fei-Fei, ImageNet large
+
+    scale visual recognition challenge, International Journal of Computer Vision
+
+    115 (3) (2015) 211–252. doi:10.1007/s11263-015-0816-y.
+
+
+
+
+                                      35
+                          Supplementary Material:
+            Interpretable intrinsic dimension estimation through
+              componentwise calibration of distance and angle
+
+
+Notation and conventions We follow the notation and method definitions in the Main paper. In partic-
+ular, d, D, and m denote generating, ambient, and candidate dimension; mmax is the candidate bound; and
+                                                 p
+k1 < k2 are Gride neighbor orders. We write Yd −→ c as d → ∞ when Pr(|Yd − c| > ε) → 0 for every ε > 0,
+and h(x) = O{g(x)} when |h(x)| ≤ C|g(x)| near the stated limit. The symbol Id denotes the d × d identity
+matrix. The abbreviation i.i.d. means independent and identically distributed. The material follows the
+dependencies of the Main argument: Section S1 supplies its derivations, Section S2 connects the estimator
+to computation and numerical stability, Section S3 specifies the experimental designs, and Section S4 gives
+the extended evidence and component-level interpretations.
+
+
+S1     Theory and derivations
+S1.1    Gride Kullback–Leibler divergence
+Calibrating a generic-order distance statistic requires its divergence from each candidate reference law. For
+neighbor orders k1 < k2 , define the ratio µ = ri,k2 /ri,k1 ∈ (1, ∞). Under the local Poisson model, its
+dimension-d density is [1, Thm. 2.3, Eq. (10)]
+
+                                                      d(µd − 1)k2 −k1 −1
+                           f (µ; d, k1 , k2 ) =                                ,        µ > 1,        (S1.1)
+                                                  µd(k2 −1)+1 B(k2 − k1 , k1 )
+
+where B(α, β) = Γ(α)Γ(β)/Γ(α + β) is the beta function [2, Secs. 5.2 and 5.12].
+    Let d1 = dˆdist be the fitted data dimension and d2 = dˆref
+                                                             m the fitted dimension of the candidate-m
+reference. The two laws compared by calibration are
+
+                            f (µ) = f (µ; d1 , k1 , k2 ),        fm (µ) = f (µ; d2 , k1 , k2 ).
+
+Their KL divergence is                                              
+                                                               f (µ)
+                                          KL(f ∥fm ) = Ef log          .
+                                                              fm (µ)
+Taking logarithms in Eq. (S1.1) gives
+
+                           log f (µ) = log d1 + (k2 − k1 − 1) log(µd1 − 1)
+                                         − [d1 (k2 − 1) + 1] log µ − log B(k2 − k1 , k1 ),
+                         log fm (µ) = log d2 + (k2 − k1 − 1) log(µd2 − 1)
+                                         − [d2 (k2 − 1) + 1] log µ − log B(k2 − k1 , k1 ).
+
+The common beta normalizer cancels. Subtracting and taking expectation yields
+                                      d1
+                    KL(f ∥fm ) = log     + (k2 − 1)(d2 − d1 )Ef [log µ]
+                                      d2
+                                   + (k2 − k1 − 1) Ef [log(µd1 − 1)] − Ef [log(µd2 − 1)] .
+                                                  
+                                                                                                      (S1.2)
+
+
+                                                             1
+   Equation (S1.2) separates the required divergence into three expectations. The following lemma evaluates
+two beta-prime log moments in closed form, leaving one reference-side expectation, evaluated below in closed
+form or by one-dimensional quadrature.
+Lemma S1.1 (Beta-prime log moments). If α, β > 0 and z ∼ β ′ (α, β) with density z α−1 (1+z)−α−β /B(α, β),
+then
+                   E[log(1 + z)] = Ψ(α + β) − Ψ(β),      E[log z] = Ψ(α) − Ψ(β),
+where Γ is the gamma function and
+                                            Γ(α)Γ(β)                       d
+                                B(α, β) =            ,        Ψ(x) =         log Γ(x)
+                                            Γ(α + β)                      dx
+define the beta and digamma functions [2, Secs. 5.2 and 5.12].
+Proof. The beta-prime normalizer is
+                                                  Z ∞
+                                      B(α, β) =         z α−1 (1 + z)−α−β dz.
+                                                   0
+
+Near zero, the kernel multiplied by the logarithmic factors is of order z α−1 | log z|; near infinity it is of
+order z −β−1 log z. Both are integrable for α, β > 0. The same bounds hold uniformly on a small closed
+neighborhood of (α, β), so the derivative may pass under the integral sign. Writing ∂β for the derivative
+with respect to β while α is held fixed, differentiation and division by B(α, β) give
+                            ∂β log B(α, β) = −E[log(1 + z)] = Ψ(β) − Ψ(α + β).
+Differentiating while holding β fixed similarly gives
+                         ∂α log B(α, β) = E[log z − log(1 + z)] = Ψ(α) − Ψ(α + β).
+The first identity yields the stated expectation of log(1 + z); substituting it into the second yields the
+expectation of log z.
+   To evaluate the three expectations in Eq. (S1.2), transform z = µd1 − 1. The inverse and Jacobian are
+                                                         dµ  1
+                                 µ = (1 + z)1/d1 ,          = (1 + z)1/d1 −1 .
+                                                         dz  d1
+The change-of-variables formula gives the transformed density explicitly:
+                                                                    dµ
+                           pZ (z) = f (1 + z)1/d1 ; d1 , k1 , k2
+                                                                     dz
+                                        z k2 −k1 −1
+                                  =                   (1 + z)−{d1 (k2 −1)+1}/d1 +1/d1 −1
+                                    B(k2 − k1 , k1 )
+                                    z k2 −k1 −1 (1 + z)−k2
+                                  =                        ,    z > 0.
+                                       B(k2 − k1 , k1 )
+Thus z ∼ β ′ (k2 − k1 , k1 ), as also noted in the Supplementary Material of Denti et al. [1], and Lemma S1.1
+gives
+                                                           Ψ(k2 ) − Ψ(k1 )
+                                              Ef [log µ] =                 ,                           (S1.3)
+                                                                  d1
+and
+                                       Ef [log(µd1 − 1)] = Ψ(k2 − k1 ) − Ψ(k1 ).                       (S1.4)
+The reference-side term uses the same substitution. Let γm = d2 /d1 > 0 denote the ratio of the fitted
+reference dimension to the fitted data dimension, so that d2 = γm d1 ; the two fitted distance laws coincide
+exactly when γm = 1. Since µ = (1 + z)1/d1 ,
+                                                              γm d 1    
+                                log(µd2 − 1) = log (1 + z)1/d1          −1
+
+                                                = log{(1 + z)γm − 1}.
+
+                                                          2
+For γm ̸= 1 this is neither of the two log moments of Lemma S1.1, so its expectation under z ∼ β ′ (k2 −k1 , k1 ),
+denoted I(γm ), has to be evaluated separately. By definition,
+                                      Z ∞ k2 −k1 −1
+                                           z        (1 + z)−k2
+                            I(γm ) =                             log((1 + z)γm − 1) dz.                  (S1.5)
+                                        0    B(k 2 −  k 1 , k1 )
+For the integer neighbor orders used throughout, I(γm ) also has a closed form. The derivation moves the
+integral to the unit interval, splits the logarithm into a known moment and a finite binomial sum, and
+evaluates each summand with a second digamma identity. Transform T = (1 + z)−1 = µ−d1 ∈ (0, 1). The
+inverse and Jacobian are
+                                                          dz
+                                        z = T −1 − 1,         = T −2 ,
+                                                          dT
+so the change-of-variables formula applied to pZ gives
+                                                                  (t−1 − 1)k2 −k1 −1 tk2 t−2
+                              pT (t) = pZ (t−1 − 1) t−2 =
+                                                                       B(k2 − k1 , k1 )
+                                          tk1 −1 (1 − t)k2 −k1 −1
+                                    =                             ,      0 < t < 1,
+                                             B(k2 − k1 , k1 )
+because (t−1 − 1)k2 −k1 −1 = t−(k2 −k1 −1) (1 − t)k2 −k1 −1 and the exponents of t add to k1 − 1. Thus T ∼
+Beta(k1 , k2 − k1 ), with the same normalizer since B(α, β) = B(β, α). In the new variable, (1 + z)γm − 1 =
+T −γm (1 − T γm ), so the logarithm splits into two terms, each absolutely integrable under pT : near t = 0 the
+density-weighted magnitudes are of order tk1 −1 | log t| and tk1 +γm −1 , and near t = 1 of order (1 − t)k2 −k1 and
+(1 − t)k2 −k1 −1 | log(1 − t)|. Hence
+                                   I(γm ) = γm E[− log T ] + E[log(1 − T γm )].                              (S1.6)
+The first expectation is already known: − log T = log(1 + z), so Lemma S1.1 with (α, β) = (k2 − k1 , k1 ) gives
+E[− log T ] = Ψ(k2 ) − Ψ(k1 ), the moment behind Eq. (S1.3). For the second, write n = k2 − kP    1 − 1. Because n
+                                                                                                    n
+is a nonnegative integer, the factor (1−t)n of the density is a finite binomial sum, (1−t)n = j=0 (−1)j nj tj ,
+and each term multiplies tk1 −1 to a pure power. Hence
+                                        n                                         Z 1
+                             1         X          n
+  E[log(1 − T γm )] =                      (−1)j     J (k1 + j, γm ),    J (s, γ) =     ts−1 log(1 − tγ ) dt. (S1.7)
+                      B(k2 − k1 , k1 ) j=0        j                                  0
+
+
+To evaluate J , substitute u = tγ , so that t = u1/γ and dt = γ −1 u1/γ−1 du:
+                                                1 1 s/γ−1
+                                                  Z
+                                     J (s, γ) =       u     log(1 − u) du.
+                                                γ 0
+The remaining integral is a beta log moment of the type treated in Lemma S1.1. Differentiating B(a, b) =
+R 1 a−1
+ 0
+   u    (1 − u)b−1 du with respect to b, under the integral sign by the same domination argument as in
+                   R1
+the lemma, gives 0 ua−1 (1 − u)b−1 log(1 − u) du = B(a, b){Ψ(b) − Ψ(a + b)}, and setting b = 1, where
+B(a, 1) = 1/a, yields
+                           Z 1
+                                                    Ψ(1) − Ψ(1 + a)
+                               ua−1 log(1 − u) du =                 ,    a > 0.
+                            0                              a
+With a = s/γ the prefactor 1/γ cancels against γ/s, so
+                                          Ψ(1) − Ψ(1 + s/γ)   Ψ(1) − Ψ(s/γ)   γ
+                             J (s, γ) =                     =               − 2,                             (S1.8)
+                                                  s                 s        s
+where the second form uses the digamma recurrence Ψ(1 + x) = Ψ(x) + 1/x at x = s/γ. Inserting Eq. (S1.8)
+with s = k1 + j into Eq. (S1.7) produces two sums. The second one is the same binomial expansion applied
+                                               R1
+to the first expectation in Eq. (S1.6): since 0 ts−1 (− log t) dt = 1/s2 ,
+                           n
+                              (−1)j nj
+                                                            Z 1
+               γm         X                       γm
+      −                                  = −                     tk1 −1 (1 − t)n (− log t) dt = −γm E[− log T ].
+         B(k2 − k1 , k1 ) j=0 (k1 + j)2      B(k2 − k1 , k1 ) 0
+
+
+                                                              3
+This second sum cancels the first term of Eq. (S1.6) exactly, and only the first sum survives:
+
+                                             X1 −1 (−1)j k2 −kj 1 −1 
+                                          k2 −k
+                                                                                       
+                                  1                                               k1 + j
+                I(γm ) =                                               Ψ(1) − Ψ             .         (S1.9)
+                          B(k2 − k1 , k1 ) j=0         k1 + j                      γm
+
+The released implementation evaluates Eq. (S1.5) by adaptive one-dimensional quadrature; over the candi-
+date ranges used in this study (m ≤ 100 for k ∈ {5, 15, 20} and m ≤ 400 for k = 10) the two evaluations agree
+to within 10−6 . Substituting Eqs. (S1.3)–(S1.5) into Eq. (S1.2) gives the complete calibrated divergence:
+                                                                     !
+                                        dˆdist              dˆref
+                                                              m
+                                                                       
+                       KL(f ∥fm ) = log        + (k2 − 1)         −1     Ψ(k2 ) − Ψ(k1 )
+                                         dˆref
+                                           m               dˆdist                                     (S1.10)
+                                    + (k2 − k1 − 1) {Ψ(k2 − k1 ) − Ψ(k1 ) − I(γm )} .
+
+Equation (S1.10) gives Main Eq. (7), with I(γm ) given by Eq. (S1.9) or by the quadrature of Eq. (S1.5).
+For the matching-law consistency check, γm = 1 gives I(1) = E[log z] = Ψ(k2 − k1 ) − Ψ(k1 ), so every term
+vanishes and KL(f ∥f ) = 0.
+
+S1.2    Angular limits and the amplitude mechanism
+The angular analysis separates local symmetry from fixed-sample high-dimensional geometry. Across these
+two regimes, the mean direction of neighbor angles has three limiting descriptions: the dimension-free π/2
+of the local-interior regime (Proposition S1.2), the value π/3 reached at fixed N as d → ∞ under a common
+amplitude (Lemma S1.3, Proposition S1.4, and Corollaries S1.5 and S1.6), and an amplitude-dependent limit
+below π/3 when both neighbor amplitudes are smaller than the center amplitude (Corollary S1.7).
+    Proposition S1.2 uses the following local-symmetry condition. At an interior point of a smooth mani-
+fold [3, Secs. 2.1 and 3.1], we assume that the sampling density is continuous and positive, that the kNN
+radius shrinks, and that the normalized neighbor displacements converge to independent uniform directions
+on the unit sphere of the tangent space. Because θ, sin θ, and cos θ are bounded and continuous, this conver-
+gence carries the arithmetic and circular means over to the limit law. This is the manifold condition needed
+to apply the statement below, which is Main Proposition 1.
+Proposition S1.2 (Dimension-free mean direction under local symmetry). Let u, v be independent uniform
+directions in Rd , and let θ be their angle. Its probability density is
+                                            Γ(d/2)
+                             hd (θ) = √                 sind−2 θ,   0 ≤ θ ≤ π.                       (S1.11)
+                                          πΓ((d − 1)/2)
+
+Here Γ is the gamma function. The density is symmetric about π/2, so the arithmetic mean and circular
+mean direction both equal π/2 for every d ≥ 2.
+Proof. The angle density follows from rotational invariance and the standard law of the inner product of two
+random directions [4, Lemmas 11–12, Eqs. (12)–(13)]. Because hd (π − θ) = hd (θ),
+                                               Z π
+                                          π              π
+                                   E(θ) − =          θ−      hd (θ) dθ = 0.
+                                          2      0       2
+
+The cosine is antisymmetric about π/2, whereas the sine is positive on (0, π), so
+                                                       Z π
+                            E(cos θ) = 0,   E(sin θ) =      sin θ hd (θ) dθ > 0.
+                                                            0
+
+The circular mean of Main Section 3.1 therefore gives
+                                                                              π
+                            ν = atan2{E(sin θ), E(cos θ)} = atan2(> 0, 0) =     .
+                                                                              2
+
+
+
+                                                       4
+     Cai et √
+            al. further show, in their growing-sample, growing-dimension regime, that the empirical distri-
+bution of d − 2(π/2 − θ) converges to the standard normal law, so the unscaled angle deviations have a
+d−1/2 scale around π/2 [4, Thm. 4]. Original DANCo combines this limit with the large-concentration von
+Mises approximation: under the ideal symmetric model, ν = π/2 while τ /d → 1 [5, Sec. 3.2, Prop. 1]. ABID
+expresses the same dimension-dependent spread through E(cos2 θ) = 1/d [6, Cor. 1].
+     The fixed-sample, increasing-dimension regular-simplex geometry is classical [7, Sec. 3.1]. The following
+i.i.d.-coordinate lemma is a direct specialization to the norm and cross-inner-product limits used here.
+Lemma S1.3 (Thin-shell concentration and near-orthogonality). For each s in a fixed finite index set,
+let Zs,1 , Zs,2 , . . . be an i.i.d. sequence with mean zero, variance one, and finite fourth moment. Assume
+                                                        (d)
+the sequences are mutually independent and let Zs = (Zs,1 , . . . , Zs,d ) ∈ Rd be the vector of its first d
+coordinates. Then
+                                          (d)             (d)   (d)
+                                       ∥Zs ∥2 p        ⟨Zs , Zt ⟩ p
+                                              −→ 1,                 −
+                                                                    → 0 (s ̸= t)
+                                          d                   d
+simultaneously over the fixed collection.
+                              2
+Proof. Fix s and put Yr = Zs,r  . Then E(Yr ) = Var(Zs,r )+{E(Zs,r )}2 = 1+0 = 1 and Var(Yr ) = E(Zs,r4
+                                                                                                        )−1,
+a finite constant; this is the only place where the finite fourth moment is used. The Yr are therefore i.i.d.
+                                                                                  Pd       p
+with finite variance, and the weak law of large numbers [8, Thm. 2.4] gives d−1 r=1 Yr −   → 1, which is the
+first limit.
+    For s ̸= t put Wr = Zs,r Zt,r . The two sequences are mutually independent, so the Wr are i.i.d.
+                                                                   2      2
+with E(Wr ) = E(Zs,r )E(Zt,r ) = 0 · 0 = 0 and Var(Wr ) = E(Zs,r     )E(Zt,r ) = 1. The same theorem gives
+  −1
+     P  d      p
+d       r=1 Wr −
+               → 0, which is the second limit.
+    Both limits hold simultaneously over the fixed collection. That collection indexes finitely many events,
+one per norm and one per pair. Fix ε > 0 and let Ed be the event that at least one of them deviates from
+its limit by more than ε; then Pr(Ed ) is at most the sum of the finitely many individual probabilities, each
+of which tends to zero, so Pr(Ed ) → 0.
+    To translate these limits into displacement angles, the next proof uses an elementary consequence of con-
+vergence in probability. If finitely many quantities converge jointly to constants, then their sums, products,
+and any continuous function of them also converge. A ratio may be included when its limiting denominator
+is nonzero; this is the continuous-mapping theorem and the special case of Slutsky’s theorem needed below.
+The statement that follows is Main Proposition 2.
+Proposition S1.4 (Displacement-angle limit under norm and inner-product concentration). Fix N and k
+                              (d)
+while d → ∞. For each d, let Xs ∈ Rd , s ∈ {i, j, ℓ}, and suppose that there are nonnegative constants Rs
+such that, simultaneously,
+                                           p                            (d)      p
+                             ∥Xs(d) ∥2 /d −
+                                          → Rs2 ,             ⟨Xs(d) , Xt ⟩/d −
+                                                                              →0            (s ̸= t).
+
+Assume additionally that (Ri2 + Rj2 )(Ri2 + Rℓ2 ) > 0. Then
+
+                                               (i) p                 Ri2
+                                       cos θjℓ −
+                                               →q                                       .                         (S1.12)
+                                                             (Ri2 + Rj2 )(Ri2 + Rℓ2 )
+
+If the assumptions hold simultaneously for all observations, the convergence is simultaneous over all selected
+triples.
+Proof. Write the cosine as a normalized numerator divided by two normalized displacement lengths:
+                                                                        (d)      (d)        (d)         (d)
+                             (i)          Ad                         ⟨Xj      − Xi , Xℓ           − Xi ⟩
+                        cos θjℓ =                   ,        Ad =                                             ,
+                                    (Bj,d Bℓ,d )1/2                                d
+where
+                                         (d)           (d)                       (d)          (d)
+                                     ∥Xj       − Xi ∥2                         ∥Xℓ     − Xi ∥2
+                            Bj,d =                     ,             Bℓ,d =                    .
+                                               d                                       d
+
+                                                                 5
+Expanding all four inner-product terms in Ad gives
+                                      (d)    (d)             (d)         (d)         (d)   (d)   (d)
+                              ⟨Xj , Xℓ ⟩ − ⟨Xj , Xi ⟩ − ⟨Xℓ , Xi ⟩ + ∥Xi ∥2
+                         Ad =                                               .
+                                                    d
+The three cross terms vanish in the limit by the inner-product assumption and the last term converges to
+                                       p
+Ri2 by the norm assumption, so Ad −   → Ri2 . The same expansion for the squared lengths leaves two norm
+                                                  p                    p
+terms and one cross term in each, whence Bj,d −  → Rj2 + Ri2 and Bℓ,d −
+                                                                      → Rℓ2 + Ri2 . The positivity assumption
+   2     2    2     2
+(Ri + Rj )(Ri + Rℓ ) > 0 makes the limiting denominator strictly positive, so the square root and the
+division are continuous at the limit point; the continuous-mapping theorem and Slutsky’s theorem then give
+Eq. (S1.12). Simultaneity over the finitely many possible triples, and hence over any selected subset, follows
+from the same finite union bound as in Lemma S1.3.
+Corollary S1.5 (Homogeneous thin shell). Suppose each observation consists of the first d coordinates of
+an infinite i.i.d. sequence with mean zero, variance σ 2 > 0, and finite fourth moment, and the sequences are
+mutually independent. Then
+                                       (d)                  (d)    (d)
+                                    ∥Xs ∥2 p 2           ⟨Xs , Xt ⟩ p
+                                             −
+                                             →σ ,                      −
+                                                                       → 0,
+                                       d                        d
+and every selected triple satisfies
+                                              (i) p 1        (i) p π
+                                         cos θjℓ −→ ,       θjℓ − → .
+                                                    2                3
+                                (d)
+Proof. The coordinates of Xs /σ are i.i.d. with mean zero, variance one, and finite fourth moment, so
+Lemma S1.3 applies to them; multiplying back by σ gives the stated norm and inner-product limits. Sub-
+                                                          (i) p
+stituting Ri = Rj = Rℓ = σ in Proposition S1.4 gives cos θjℓ −→ 1/2, and continuity of arccos at 1/2 gives
+the angle limit.
+                                                           (d)               (d)
+Corollary S1.6 (Uniform hyperball). Let X1 , . . . , XN be independent and uniformly distributed in the
+d-dimensional unit ball. For fixed N , all selected-neighbor angles converge in probability to π/3 as d → ∞.
+                (d)     (d)   (d)            (d)                 (d)
+Proof. Write Xs = ρs Us , where ρs and Us are its radius and direction. The ball of radius 1 − ε
+                                                                                                    (d)
+occupies the fraction (1−ε)d of the volume of the unit ball, so uniform-ball sampling gives Pr{ρs ≤ 1−ε} =
+                                                        (d)                       (d) p
+(1 − ε)d → 0 for every ε ∈ (0, 1) [8, Sec. 2.3]; since ρs ≤ 1, this is exactly ρs −   → 1 and the mass collects
+                                                                      (d) (d) p
+on the boundary shell. Independent uniform directions satisfy ⟨Us , Ut ⟩ −      → 0 [4, Lemmas 11–12]. Hence
+   (d)   p           (d)  (d) p                                                    √
+∥Xs ∥2 − → 1 and ⟨Xs , Xt ⟩ −  → 0. Rescaling all points by the common factor d leaves every displacement
+                                                                    √
+angle unchanged, so Proposition S1.4 may be applied to X    es(d) = d Xs(d) , which satisfies its hypotheses with
+Ri = Rj = Rℓ = 1 and gives
+                                               (i) p 1         (i) p π
+                                         cos θjℓ − → ,       θjℓ − → .
+                                                      2              3
+
+                                                                       (d)           (d)          (d)
+Corollary S1.7 (Gaussian scale mixture). Let Xs = Ss Zs , where the Zs ∼ N (0, Id ) are indepen-
+dent and the scale vector (S1 , . . . , SN ) is independent of all Gaussian vectors. Conditional on the positive
+amplitudes,
+                                                  p                   (d)   p
+                                    ∥Xs(d) ∥2 /d −→ Ss2 ,   ⟨Xs(d) , Xt ⟩/d −
+                                                                            → 0.
+For selected neighbors with amplitudes Sj and Sℓ ,
+                                                    (d)            (d)
+                                              ∥Xj          − Xi ∥2 p 2
+                                                                   → Si + Sj2 ,
+                                                                   −
+                                                           d
+and
+                                                   (i) p                       Si2
+                                            cos θjℓ −
+                                                    →q                                      .
+                                                                 (Si2 + Sj2 )(Si2 + Sℓ2 )
+
+If Sj < Si and Sℓ < Si , the limiting angle is below π/3, including the case Sj ̸= Sℓ .
+
+
+                                                                         6
+Proof. Condition on the positive amplitudes. The Gaussian vectors remain independent with i.i.d. standard
+normal coordinates, whose fourth moment is finite, so Lemma S1.3 applies to them; multiplying by the
+conditionally constant Ss scales the norm limit to Ss2 and leaves the inner-product limit at zero. Expanding
+the displacement length gives the distance limit, and Proposition S1.4 with Rs = Ss gives the cosine; the
+positive amplitudes make (Si2 + Sj2 )(Si2 + Sℓ2 ) > 0, so its positivity assumption holds. If both selected
+amplitudes are below Si , each denominator factor is below 2Si2 ; the limiting cosine exceeds 1/2, and the
+decreasing function arccos gives an angle below π/3.
+    For the lognormal GSM used in the finite-sample experiments, Ss > 0 are independent with log Ss ∼
+N (0, σS2 ), independently of the Gaussian vectors. Thus σS is the standard deviation of log amplitude: σS = 0
+gives a common amplitude, while larger values increase sample-amplitude heterogeneity without changing
+the generating dimension.
+
+Purpose and construction of the finite-sample            diagnostics The finite-sample diagnostic uses cen-
+tered norm ai = ∥xi − x̄∥2 , with x̄ = N −1 i xi , as P
+                                              P
+                                                        the observable measure of an observation’s amplitude,
+and reports it relative to its sample mean ā = N −1 i ai . By Corollary S1.7, the limiting cosine increases
+with the center amplitude relative to its selected neighbors, so a larger centered norm, the observable proxy
+for that amplitude, is expected to go with a smaller per-center mean direction. Figure S1 bins centered norm
+into deciles in a separate GSM sample at the focal level σS = 0.25 of Section S3.5 and reports the mean and
+within-decile standard deviation of ν̂i ; the decile means decrease monotonically from 1.031 to 0.668 radians.
+Main Figure 2 examines the finite-N transition between angular regimes using the design in Section S3.5.
+
+                                          Center-level GSM geometry, σS = 0.25
+                                    1.1
+                                                                                                         π/3
+                                    1.0
+
+                                    0.9
+
+                                    0.8
+                         ν̂ (rad)
+
+
+
+
+                                    0.7
+
+                                    0.6
+
+                                    0.5
+
+
+                                          0.6          0.8            1.0            1.2         1.4      1.6
+                                                                normalized centered norm ai/ā
+
+
+Figure S1: Normalized centered norm ai /ā and per-center mean direction within a d = 70, σS = 0.25 GSM sample, with ā
+the mean centered norm. Deciles contain equal numbers of centers; error bars show within-decile standard deviations, and the
+dashed horizontal line marks π/3.
+
+
+
+
+S1.3      Profiled circular von Mises divergence
+The circular von Mises KL divergence in Main Eq. (4), taken from Vo et al. [9], is
+
+                                                             I0 (τ2 )                                                I1 (τ )
+          KL{q(·; ν1 , τ1 ) ∥ q(·; ν2 , τ2 )} = log                   + A(τ1 ){τ1 − τ2 cos(ν2 − ν1 )},     A(τ ) =           .
+                                                             I0 (τ1 )                                                I0 (τ )
+
+
+
+
+                                                                          7
+Adding and subtracting A(τ1 )τ2 gives the decomposition stated after Main Eq. (4): a concentration term
+plus an angular-location penalty,
+
+                                       I0 (τ2 )
+                     KL{q1 ∥q2 } = log          + A(τ1 )(τ1 − τ2 ) + A(τ1 )τ2 {1 − cos(ν2 − ν1 )} .
+                                       I0 (τ1 )                      |             {z           }
+                                   |              {z            }           location penalty
+                                               concentration
+
+The previous subsection shows that sample-amplitude heterogeneity can move the mean direction with-
+out changing the generating dimension, so the relative mean direction is treated as a nuisance parameter.
+Following the general rule of Main Eq. (6), let δ rotate the reference mean direction; the profiled angular
+                                                                                       ref       ref
+discrepancy of Main Eq. (9) substitutes (ν1 , τ1 ) = (ν̂, τ̂ ) and (ν2 , τ2 ) = (νm        + δ, τm   ) and takes the infimum
+over δ:
+                                         ref
+                              h     I0 (τm    )                                                                i
+             ∆prof
+               ang (m) =  inf   log             + A(τ̂ )(τ̂ − τm
+                                                                ref
+                                                                    ) + A(τ̂ )τm
+                                                                                ref
+                                                                                    {1 − cos(ν ref
+                                                                                               m   +  δ − ν̂)}  .
+                           δ         I0 (τ̂ )
+Only the last term depends on δ. For τ ≥ 0 the integral representation gives I0 (τ ) > 0 and I1 (τ ) ≥ 0, so
+       ref
+A(τ̂ )τm   ≥ 0, and 1 − cos x ≥ 0 makes the term nonnegative. It attains its minimum value zero when the
+                               ref                               ref
+mean directions are aligned, νm    + δ = ν̂ modulo 2π; if A(τ̂ )τm   = 0, the bracket does not depend on δ and
+the same value results. Therefore
+                                                               ref
+                                                          I0 (τm    )
+                                      ∆prof
+                                       ang (m) = log
+                                                                                     ref
+                                                                      + A(τ̂ )(τ̂ − τm   ),
+                                                           I0 (τ̂ )
+
+which is Main Eq. (10): the infimum is attained by aligning the mean directions, and only the concentration
+term remains.
+   Full matching keeps the original reference mean direction, so its angular discrepancy ∆ang (m) in Main
+Eq. (5) is Main Eq. (4) at δ = 0, and its excess over the profiled discrepancy is
+
+                             ∆ang (m) − ∆prof             ref         ref
+                                         ang (m) = A(τ̂ )τm {1 − cos(νm − ν̂)} ≥ 0.
+
+Profiling therefore removes exactly the angular-location penalty of Main Eq. (4) while retaining the concen-
+                                                                                                             ref
+tration comparison. For a fixed offset that is not a multiple of 2π and τ̂ > 0, this penalty increases with τm   ;
+when both the offset and the reference concentration vary across candidates, its candidate-wise behavior
+depends on both quantities.
+
+S1.4      Adequacy of the circular von Mises approximation
+Under local symmetry the angle density is exactly hd (θ) ∝ sind−2 θ on [0, π] (Proposition S1.2, Eq. (S1.11)).
+The exact density is therefore the locally symmetric benchmark. Its symmetry about π/2 also fixes its mean
+direction there for every d, so it has no parameter with which to express the data–reference difference in
+angular location that the observed samples display.
+    DANCo accommodates variable angular location through the von Mises family: it represents each ob-
+served and reference mutual-neighbor angle distribution with a fitted circular von Mises approximation [5,
+Sec. 3.2], and that family is the standard parametric model for circular data [10, Sec. 3.3.6]. Writing qcirc
+for the density q(·; ν, τ ) of Main Section 3.1, we separately fit this law by maximum likelihood to the pooled
+neighbor angles and assess its descriptive fit. These parameters differ from the aggregated per-center statis-
+tics used for calibration.
+    Because the physical angles occupy [0, π] while qcirc is circular, we first measure its outside-range mass,
+                                                         Z π
+                                          ϵ(ν, τ ) = 1 −     qcirc (θ; ν, τ ) dθ                         (S1.13)
+                                                                0
+
+and then assess its fit on the physical range with the renormalized density
+
+                                                               qcirc (θ; ν, τ )
+                                         q[0,π] (θ; ν, τ ) =                    1[0,π] (θ).                        (S1.14)
+                                                                1 − ϵ(ν, τ )
+
+
+                                                                 8
+For these fitted pooled models, Eq. (S1.13) gives ϵ at most 5.0 × 10−8 and falls below 10−8 on every real
+dataset, so the circular approximation    places essentially all fitted mass in the physical range.
+   For the pooled M = N k2 angles, let Q denote the cumulative distribution function (CDF) of Eq. (S1.14)
+                                
+
+and let θ(1) ≤ · · · ≤ θ(M ) be the ordered observations. We report
+                                                                           
+                       n r             o                                r−1
+          D+ = max           − Q(θ(r) ) ,     D− = max Q(θ(r) ) −              ,    G = max(D+ , D− ).
+                     r   M                            r                  M
+
+The gaps G are 0.004 for the uniform 70-ball, 0.017 for MNIST digit 3, 0.011 for raw ImageNet koala, and
+0.022 for the GSM (σS = 0.25). Together with the small outside-range mass ϵ, these checks support the
+separately fitted pooled von Mises laws in the evaluated settings, including the GSM. They do not assess
+the aggregated (ν̂, τ̂ ) pair used in calibration: for raw koala the pooled fit has τ = 39.98, while calibration
+uses τ̂ = 90.1. Figure S2 shows representative uniform-ball and ImageNet koala comparisons.
+
+                   uniform ball d = 70                                                ImageNet koala (raw)
+                    max CDF gap 0.004                          empirical        2.5    max CDF gap 0.011                             empirical
+               4                                               VM fit                                                                VM fit
+                                                                                2.0
+               3
+                                                                                1.5
+     density
+
+
+
+
+               2
+                                                                                1.0
+
+               1                                                                0.5
+
+               0                                                                0.0
+                         0.8      1.0       1.2        1.4    1.6     1.8              0.4     0.6         0.8    1.0          1.2     1.4
+                                     pairwise angle θ (rad)                                           pairwise angle θ (rad)
+
+
+Figure S2: Representative pooled neighbor-angle distributions and fitted von Mises (VM) laws for the uniform 70-ball and raw
+ImageNet koala. The koala fit has a modest descriptive CDF gap; its dominant data–reference discrepancy occurs in angular
+location.
+
+
+
+
+S2             Model and numerical validity
+S2.1               Algorithm
+Algorithm S1 connects the componentwise objective to a complete estimation procedure. Its steps also
+identify the operations used in the complexity and timing analyses below. As an implementation convention,
+the procedure applies one uniform lower cutoff: it skips angular calibration whenever the distance estimate
+is at most five and returns the distance estimate alone.
+
+
+
+
+                                                                            9
+Algorithm S1 Componentwise calibrated intrinsic-dimension estimation
+Require: data X , neighborhood size k, candidates 1:mmax , distance model, angular mode, reference source
+ 1: Find the k + 1 nearest neighbors and distances of every xi
+ 2: Form MiND or Gride ratios and fit dˆdist
+ 3: if dˆdist ≤ 5 then
+ 4:      return dˆdist
+ 5: end if
+                        k
+                          
+ 6: Compute the 2 neighbor angles at every observation xi , the center of its neighborhood
+ 7: Fit (ν̂i , τ̂i ) and aggregate (ν̂, τ̂ ) by circular and arithmetic means, respectively
+ 8: if a circular resultant vector is zero then
+ 9:      return dˆdist
+10: end if
+11: for m = 1, . . . , mmax do
+12:      Obtain dimension-m reference statistics from a newly simulated uniform hyperball, reused Monte
+    Carlo reference statistics, or the precomputed spline surface
+13:      Compute ∆dist (m) and the Full and Profiled angular discrepancies
+14: end for
+15: Minimize each component curve and each pointwise combined curve
+16: Optionally refine an interior integer minimum by interpolation on [1, mmax ]
+17: return the selected estimate and all component curves
+
+
+    Here a Monte Carlo reference is a simulation-based finite-sample calibration. For each candidate m, it
+draws N points uniformly from the m-dimensional unit hyperball and computes (dˆref      ref  ref
+                                                                                   m , νm , τm ). Repeating
+this construction across all candidates forms one reference replicate.
+
+S2.2     Computational complexity
+Time complexity The analysis follows the steps of Algorithm S1 and separates the observed-data steps
+1–7 from the candidate loop, steps 11–16, for two reasons. Steps 1–7 form the observed-data pipeline of
+every variant: the distance model selects the fit at step 2, whereas the angular mode and the reference source
+change nothing before step 8; the exit at step 3 skips the angular steps 6–7, and the exit at step 8 skips the
+loop. They are also the only steps that involve the ambient dimension D, whereas the loop is governed by
+the candidate bound mmax and the reference source. The loop is analyzed for the three reference sources
+admitted at step 12, because the divergences at step 13 cost O(k) per candidate independently of N , so the
+reference source is what sets the loop’s cost.
+    Observed data, steps 1–7. Under the exact     pairwise-distance model used by the experiments, the neighbor
+search at step 1 costs O(N 2 D) and the k2 angles per center at step 6 cost O(N k 2 D). The remaining steps are
+                                             
+
+cheaper. At step 2, forming the MiND first-neighbor ratios or the Gride generic-order ratios from the stored
+(k + 1)-nearest-neighbor distances costs O(N k), and one evaluation of the distance log-likelihood during the
+fit of dˆdist costs O(N ); the integer grid search that initializes the MiND fit evaluates it at d = 1, . . . , D, for
+O(N D). At step 7, fitting the per-center von Mises statistics accumulates the k2 angle sines and cosines at
+                                                                                     
+
+every center for O(N k 2 ) and inverts one Bessel ratio per center for O(N ); the exits at steps 3 and 8 inspect
+quantities already computed. All of these terms are dominated by the neighbor search, so the observed-data
+time is
+                                             Tdata = O N (N + k 2 )D ,
+                                                      
+
+in which N 2 D is the search and N k 2 D the angle construction.
+    Candidate loop and selection, steps 11–16. Each candidate divergence at step 13 costs O(k) and does not
+depend on N : a finite digamma series of k+1 terms for MiND, a finite digamma sum of k2 −k1 terms for Gride,
+or the adaptive one-dimensional quadrature of the released implementation (at most 50 subintervals). With
+the neighbor orders fixed, the minimization and optional refinement at steps 15–16 scan the mmax candidates
+once, for O(mmax ). The loop cost therefore depends on how step 12 obtains the reference statistics, and
+three sources are admitted. A newly simulated hyperball for every candidate is the calibration of the original
+DANCo [5], which rebuilds every reference for every dataset; it is the cost that the other two sources avoid.
+
+
+                                                         10
+The precomputed spline surface is the FastDANCo route and serves the CNN profiles of Section S3.7, where
+hundreds of layers are calibrated up to mmax = 400. Reused Monte Carlo references are the design of the
+synthetic, noise, GSM and image experiments of Section S3.1: one reference replicate at the observed sample
+size is simulated once and shared by every component objective and configuration compared on it, which is
+what the growing calibration cache of the released implementation does. The last two sources are the modes
+run in this study; the first is analyzed as their baseline.
+    With a newly simulated hyperball, step 12 repeats steps 1, 2, 6 andP7 inside a simulated dimension-m
+                                                                         mmax
+hyperball of N points, so one reference costs O{N (N + k 2 )m}. Because m=1    m = mmax (mmax + 1)/2, the
+candidate sweep contributes a factor quadratic in the candidate bound, giving
+
+                                      TMC = O N (N + k 2 )(D + m2max ) ,
+                                               
+                                                                                                      (S2.1)
+
+whose first summand is the observed geometry and whose second the accumulated reference simulation.
+With the precomputed surface of FastDANCo, defined in Main Section 3.1, step 12 is one O(1) lookup per
+candidate, so steps 11–16 together cost O(mmax ) and the online time becomes
+
+                                    TFast = O N (N + k 2 )D + mmax ,
+                                             
+                                                                                                (S2.2)
+
+in which the simulation summand of (S2.1) collapses to a single scan over candidates. With reused Monte
+Carlo references, step 12 reads statistics simulated before the run, so the online cost has the form of TFast
+with the simulation term already paid. For a sample-size grid GN and nsim simulated references per grid
+cell, the one-time construction cost of the surface is
+                                                                          
+                                                   X                      
+                                Toffline = O nsim       Ng (Ng + k 2 )m2max ,
+                                                                          
+                                                 Ng ∈GN
+
+paid once for every sample size on the grid. The packaged surface uses five sample sizes, mmax = 400, and
+nsim = 35, for 5 × 400 × 35 = 70,000 calibration simulations. Ceruti et al. report the original FastDANCo
+bound under their nearest-neighbor search model and a candidate range tied to ambient dimension [5].
+Equations (S2.1)–(S2.2) instead match the exact search used here and keep ambient dimension D separate
+from candidate bound mmax .
+
+Space complexity For on-the-fly Monte Carlo calibration, an unchunked exact distance matrix uses
+O(N 2 ) workspace; query batches of size b reduce this term to O(bN ), giving the peak storage
+
+                                    O N max(D, mmax ) + bN + N k 2 ,
+                                      
+
+whose three terms hold the data matrix together with the largest candidate reference   point set of step 12,
+the step-1 buffer that scores b query rows against all N points at once, and the k2 neighbor-pair angles of
+                                                                                   
+
+step 6 at each of the N centers.
+   For FastDANCo evaluation on the precomputed surface, the peak storage is
+
+                                   O N D + bN + N k 2 + mmax + Sspline ,
+                                                                        
+
+which adds the candidate curves of steps 13–15 and the fitted surface Sspline read at step 12 to the same
+three data-side terms.
+
+S2.3    Numerical implementation and safeguards
+Two safeguards stabilize candidate selection. The angular discrepancy uses exponentially scaled Bessel
+functions before any overflowing intermediate is formed. Fractional refinement is restricted to the computed
+candidate interval [1, mmax ], preventing extrapolated minima.
+   When a circular resultant vector is zero, its mean direction is undefined; the angular component is marked
+unavailable and the estimator returns the distance estimate.
+   Define the exponentially scaled modified Bessel function by
+
+                                            Iαe (x) = e−|x| Iα (x),                                   (S2.3)
+
+
+                                                      11
+where α denotes the Bessel order and is unrelated to the angular mean direction ν. Then
+                                                        I0 (τ2 )                      I e (τ2 )
+                                                  log            = |τ2 | − |τ1 | + log 0e       ,
+                                                        I0 (τ1 )                      I0 (τ1 )
+                                                                                                                                                   (S2.4)
+                                                         I1 (τ )   I e (τ )
+                                                                 = 1e .
+                                                         I0 (τ )   I0 (τ )
+
+Both identities follow directly from Iα (x) = e|x| Iαe (x): taking logarithms turns the exponential factors into
+|τ2 |−|τ1 |, while the common factor cancels in the I1 /I0 ratio. Ordinary double-precision evaluation overflows
+near concentration 709.78. Let Nref be the number of points in a reference. The illustrated calibration uses
+Nref = 500, and its first affected candidate is m = 278; the boundary is similar across the five precomputed
+sample sizes 450–700. The corrupted ordinary calculation first becomes negative at m = 284, violating KL
+non-negativity and creating a possible false minimum. Equations (S2.3) and (S2.4) keep the KL finite and
+positive through candidate 400 (Figure S3).
+
+
+
+
+                                                                                            ordinary Bessel overflows: m = 278
+                                             scaled Bessel (ours)
+                                   101
+                                             unscaled (reference impl.)
+
+                                   100
+                   von Mises KL
+
+
+
+
+                                     0
+
+
+                                  −100
+
+                                  −101
+
+                                  −102
+
+                                         0   50          100       150         200      250                                      300   350   400
+                                                               candidate dimension m (Nref = 500)
+
+
+Figure S3: Calibration-side Bessel overflow for fixed data statistics and the Nref = 500 calibration. Ordinary evaluation loses
+validity at candidate m = 278 and becomes negative at m = 284. Scaled evaluation remains finite and positive through
+candidate 400; dashed squares and solid circles denote ordinary and scaled evaluation, respectively.
+
+
+
+S2.4      Computational scaling by workload
+The four timed workloads are step ranges of Algorithm S1 with the costs of Section S2.2. Observed-data
+statistics runs steps 1–7 and stops before the candidate loop, so its time is Tdata . The three complete
+evaluations run all steps and differ only in the reference source at step 12: precomputed spline references
+give TFast of Eq. (S2.2), newly generated Monte Carlo references give TMC of Eq. (S2.1), and reused Monte
+Carlo references give the form of TFast with the simulation term paid before timing.
+    Figure S4a varies ambient dimension at N = 2500, k = 10 while timing only observed-data steps, thereby
+isolating the cost that grows with D. CPU is faster for the two smallest workloads, where device transfer
+and process initialization dominate, while GPU becomes faster at D ≥ 104 ; at D = 105 the observed-data
+computation takes about 51 s on CPU and 34 s on GPU, with median per-process peak resident memory of
+3761 MB on CPU and 3824 MB of allocated device memory on GPU.
+    Figure S4b fixes N = 500, D = 400, and k = 10 and varies mmax to isolate reference construction
+and candidate evaluation. At mmax = 400, precomputed and reused references remain below 0.5 s on both
+backends, whereas regenerating Monte Carlo references takes seconds and grows with the candidate bound
+because it constructs more references; the observed data are small in this setting, so GPU setup costs exceed
+the observed-data savings.
+    The precomputed and reused evaluations in Figure S4b therefore finish one dataset in under 0.5 s on
+both backends; Main Table 1 separately reports a median of 0.03 seconds for MiND–Full, which excludes the
+
+
+                                                                          12
+                         (a) observed-data geometry (N = 2500)                 (b) complete evaluation (N = 500)
+
+                                   CPU observed-data statistics          101
+                  101
+  wall time (s)
+
+                                   GPU observed-data statistics
+                                                                         100
+                  100
+                                                                        10−1
+                  10−1
+
+                         102        103        104                105          50 100         200                  400
+                                  ambient dimension D                                   candidate bound mmax
+                                                                         precomputed spline (CPU)          new MC references (GPU)
+                                                                         precomputed spline (GPU)          reused MC references (CPU)
+                                                                         new MC references (CPU)           reused MC references (GPU)
+
+
+Figure S4: Wall time for the explicitly defined workloads, shown as the median of three fresh-process measurements after
+warm-up. (a) Observed-data statistics versus ambient dimension. (b) Complete evaluation with precomputed spline, newly
+generated Monte Carlo, or reused Monte Carlo references versus candidate bound; solid lines with circles are CPU, while dashed
+lines with squares are GPU.
+
+
+
+shared reference construction. These measurements place componentwise calibration in the practical cost
+range of the estimators collected in scikit-dimension [11] for the evaluated workloads and data sizes.
+
+
+S3                  Experimental design and reporting
+S3.1                 Common settings
+Where an implementation is available, the reference estimators come from scikit-dimension [11]. The
+synthetic, noise, GSM, and image experiments construct Monte Carlo references at the observed sample
+size by the construction of Section S2.1. One reference replicate therefore holds (dˆref   ref  ref
+                                                                                      m , νm , τm ) at every
+candidate, and the component objectives entering a comparison reuse it. Each data replicate draws every
+dataset afresh and independently. Data and reference replicates are shared across configurations whenever a
+comparison changes one estimator component or one perturbation level, which keeps the data and calibration
+realization matched for the comparison. Unless stated otherwise, MPE is computed within each replicate
+and reported as a mean ± standard deviation over replicates. Each experiment is summarized within its
+own replicate design, so summaries at nominally identical settings differ slightly across experiments: the
+clean MiND–Full MPE is 6.33% under the twenty-replicate aggregation of Main Table 1, 6.24% at k = 10,
+N = 2500 in the five-replicate sensitivity sweep (Table S4), and 6.75% at η = 0 in the ten-replicate noise
+design (Table S5).
+    The candidate search runs over m = 1, . . . , min(mmax , D) with mmax = 100 for the standard synthetic
+experiments, 200 for the image experiments, and 400 for the CNN profiles; benchmark manifolds whose
+ambient dimension lies below mmax are therefore searched up to D. Reference angular statistics and penalty
+curves are reported over the valid candidates, those whose reference distance estimate exceeds five, which
+start at m = 6. The search itself runs over every candidate; references with a distance estimate of at most
+five carry zero concentration and are excluded only from the reported ranges.
+
+S3.2                 Clean-manifold benchmark
+The primary benchmark uses 24 manifolds with N = 2500 points each. Twenty data replicates form the
+sampling design, and the ten estimators of the primary comparison evaluate the same replicates, so estimator
+differences carry no sampling offset; MiND–Full uses the matching Monte Carlo reference replicate.
+    The component comparison keeps the 14 benchmark manifolds on which all eight component objectives
+are defined: on the other ten, a preliminary MiND distance estimate at most five omits angular calibration,
+
+
+
+                                                                        13
+so the angle-only objectives are undefined. Five reference replicates, with one data replicate per manifold,
+supply the replicate summary.
+
+S3.3     Sensitivity sweeps
+The sensitivity study sweeps the neighborhood size over k ∈ {5, 10, 15, 20} at N = 2500 and the sample size
+over N ∈ {625, 1250, 2500, 5000} at k = 10. Each setting uses five data replicates of the 24-manifold suite.
+
+S3.4     Neighborhood-relative noise
+The noise levels are η ∈ {0, 0.05, 0.1, 0.2, 0.4} under Main Eq. (11). Ten data replicates of 2500 observations
+per manifold are generated. Within a replicate, the clean data are shared across noise levels, so a change in
+accuracy follows the added noise.
+
+S3.5     Gaussian scale mixture
+The amplitude experiment uses the lognormal GSM of Section S1.2 with generating dimension d = 70 and
+N = 2500 observations per sample. Each sample is zero-padded into D = 100, an isometric embedding that
+leaves every neighbor distance and angle unchanged and extends the candidate search to 100. The sweep
+varies σS ∈ {0, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35} over 30 data replicates at each level. Within a replicate, the
+latent Gaussian draws are reused across amplitude levels, so every comparison changes one factor at a time.
+    To relate the simulated amplitude sweep to the amplitude variation observed in real images, we summarize
+sample-to-sample radial variation by the coefficient of variation (CV) of the centered norm. For centered
+norms ai = ∥xi − x̄∥2 , the CV, computed with population standard deviation, is
+                                 N                           PN
+                              1 X                    {N −1                 2 1/2
+                                                              i=1 (ai − ā) }
+                       ā =         ai ,   CV(a) =                                 ,   ā > 0.
+                              N i=1                               ā
+                                                                       2
+For the lognormal amplitude, CVS = {Var(Si )}1/2 /E(Si ) = (eσS − 1)1/2 , and CVZ denotes the coefficient
+of variation of ∥Zi ∥, equal to 0.085 at d = 70. Under population centering, ∥Xi ∥ = Si ∥Zi ∥, and the
+independence of Si and Zi gives
+                                     1 + CV2 = (1 + CV2S )(1 + CV2Z ).
+The sample-centered CV(a) follows this relation approximately, so the sweep brackets the values CV(a) =
+0.15–0.33 observed across the 17 image classes of Table S9. The level σS = 0.25 lies inside this range and
+serves as the focal level for the detailed comparison and the control.
+    At the focal level, two diagnostics complement the sweep. The first follows the angular-location penalty
+along the candidate axis over five replicates and is reported in Section S4.5. The second is a known-
+amplitude control that divides each observation by its simulated amplitude, Xi /Si = Zi . All data-side
+statistics are recomputed from Zi : the neighbor search, the distance ratios, and the neighbor angles. The
+latent Gaussian draws, the generating dimension d = 70, and the paired reference realization are retained,
+so the transformation removes only the multiplicative amplitude factor. Because the same Zi draws are used
+across amplitude levels, the control coincides with the matched σS = 0 sample by construction.
+    A separate simulation examines the regime transition of Main Figure 2 with N = 2500, k = 10, exact
+nearest-neighbor search, and the same angular estimator. The homogeneous-amplitude panel varies the ball
+dimension over d ∈ {2, 3, 5, 8, 12, 20, 35, 50, 70, 100, 150, 250, 400}, and the heterogeneous-amplitude panel
+fixes d = 70 and varies σS over the sweep grid above. The center-level diagnostic of Figure S1 uses one
+sample at the focal level σS = 0.25.
+
+S3.6     Image data
+The image classes are MNIST digits 3 and 7 [12], CIFAR-10 birds and cats [13], and the ImageNet koala
+and milkweed-butterfly classes [14, 15]. They contain 1010/1028, 5000, and 547/648 observations, and their
+ambient dimensions are 784, 3072, and 150528. Main Section 4.1 defines the two normalizations, centered
+radial and per-image contrast. A zero centered vector remains zero, a constant image maps to zero, and
+
+
+                                                      14
+every observed-data statistic (neighbor search, distance ratios, angles) is recomputed on the transformed
+sample.
+    Each class contributes one fixed sample, so the observed angular statistics stay fixed while the calibration
+side varies. Five reference replicates serve every image estimate, and each calibrated estimate averages over
+the five. Over the valid candidates m = 6, . . . , 200, the five replicates give mean-direction ranges within
+[1.142, 1.495] radians; Table S1 reports the range matched to each sample size together with the observed
+data value.
+Table S1: Sample-size-specific reference mean-direction ranges. Each image row uses the five reference replicates over candidates
+m = 6, . . . , 200; the last row gives the Gride reference surface of the CNN study at its effective sample sizes over m = 6, . . . , 400.
+The observed gap is the lower reference boundary minus the data mean direction. A negative gap places the data value above
+the lower boundary, and both MNIST values also lie below the upper boundary, hence inside the range.
+
+
+                       N     Data                        reference min       reference max       observed ν̂         gap
+                     547     ImageNet koala                        1.142               1.443           0.934      0.208
+                     648     ImageNet butterfly                    1.144               1.447           0.915      0.229
+                    1010     MNIST 3                               1.150               1.464           1.166     −0.016
+                    1028     MNIST 7                               1.150               1.467           1.157     −0.006
+                    5000     CIFAR-10 bird                         1.169               1.495           0.898      0.271
+                    5000     CIFAR-10 cat                          1.169               1.495           0.946      0.223
+                495–500      CNN surface (Gride)                   1.115               1.431                –           –
+
+
+S3.7       CNN study
+The CNN study evaluates AlexNet [16], VGG-16 [17], and ResNet-18/34 [18] on seven single-object Ima-
+geNet categories, with three independent 500-image subsamples for every architecture and category. At each
+checkpoint, exact-duplicate activation rows are removed once, and Gride–Profiled, TWO-NN, and MLE read
+the resulting common matrix. The effective sample size used by the Gride reference surface is therefore the
+number of unique rows. Over the effective sample sizes of this study (495–500 unique rows) and candidates
+m = 6, . . . , 400, the surface’s reference mean direction ranges from 1.115 to 1.431 radians (Table S1) and de-
+creases overall with the candidate dimension. A single Gride–Profiled cell (ResNet-18, second residual stage,
+one subsample) returns the candidate bound 400; the reported medians are unaffected. Both Gride variants
+use integer candidate minima in this study. TWO-NN uses the discarded-tail fit of Facco et al. via scikit-
+dimension; MLE uses the package’s k = 10 Levina–Bickel estimate. Checkpoints record pooling, stage,
+and linear outputs, so the sampled grid resolves layer-wise change to the nearest such transition. Relative
+depth divides the cumulative number of convolutional, linear, and final adaptive-pooling transformations at
+a checkpoint by the maximum such count, placing every network on a common input-to-output interval;
+residual projection shortcuts are not counted separately.
+    The packaged Gride reference surface of Main Section 3.5 covers m = 1, . . . , 400 at sample sizes 450, 500,
+580, 640, and 700, and every grid point averages 35 independently simulated hyperballs. The MiND surface
+comes from the same grid and the same simulated hyperballs, so the two surfaces agree grid point by grid
+point on their angular entries and differ only in the distance statistic.
+
+
+S4       Extended experimental results
+S4.1       Benchmark detail and reference estimators
+Table S2 and Figure S5 expand Main Table 1 with per-manifold estimates and signed errors.
+
+
+
+
+                                                                   15
+     Table S2: Estimated ID of ten estimators on all 24 benchmark manifolds (mean over the successful data replicates out of 20). FisherS on M10d Cubic averages its single
+     successful replicate; its other 19 replicates failed.
+
+
+                       Manifold              d CorrInt MiND–Full (DANCo) ESS FisherS MADA MLE MiND–ML TLE TWO-NN lPCA
+                       M10a Cubic           10       8.6                    10.1   10.2     10.3      9.2    8.7          8.9    9.6         9.1   11.0
+                       M10b Cubic           17      12.7                    17.1   17.3     17.0     13.9   13.2         13.7   14.2        14.2   18.0
+                       M10c Cubic           24      16.2                    24.5   24.4     24.0     18.0   17.2         18.0   18.1        18.8   25.0
+                       M10d Cubic           70      31.8                    70.6   70.0     57.1     36.8   35.7         38.0   35.0        40.2   71.0
+                       M11 Moebius           2       2.0                     2.0    2.5      2.0      2.1    2.0          2.0    2.2         2.0    3.0
+                       M12 Norm             20      12.7                    20.0   19.8     20.0     16.2   15.5         16.3   15.5        17.0   20.0
+                       M13a Scurve           2       2.0                     2.0    2.1      2.9      2.1    2.0          2.0    2.1         2.0    3.0
+                       M13b Spiral           1       4.6                     1.1    2.0      2.0      3.8    1.6          1.1    1.9         1.0    2.0
+                       M1 Sphere            10       8.9                    10.7   10.2     11.0      9.6    9.0          9.2   10.1         9.4   11.0
+16
+
+
+
+
+                       M2 Affine 3to5        3       2.9                     2.9    2.9      2.9      3.0    2.8          2.9    3.1         2.9    3.0
+                       M3 Nonlinear 4to6     4       3.5                     3.8    4.0      3.4      4.1    3.7          3.8    4.2         3.8    5.0
+                       M4 Nonlinear          4       3.8                     3.9    5.0      5.8      4.4    4.0          3.9    4.5         3.9    8.0
+                       M5a Helix1d           1       1.0                     1.0    1.6      2.9      1.1    1.0          1.0    1.1         1.0    3.0
+                       M5b Helix2d           2       2.8                     2.3    2.9      2.9      3.1    2.6          2.3    2.9         2.0    3.0
+                       M6 Nonlinear          6       5.9                     6.4    8.5      8.5      7.2    6.4          6.1    7.1         6.0   12.0
+                       M7 Roll               2       1.9                     2.0    2.1      2.9      2.1    2.0          2.0    2.1         2.0    3.0
+                       M8 Nonlinear         12      11.4                    17.3   19.6     17.4     14.6   13.5         13.5   14.0        13.3   24.0
+                       M9 Affine            20      13.7                    19.6   19.4     18.9     15.2   14.5         15.0   15.3        15.5   20.0
+                       Mbeta                10       3.4                     6.4    6.0      5.3      6.6    5.8          6.2    6.2         6.4   10.0
+                       Mn1 Nonlinear        18      12.5                    17.8   18.4     17.1     14.2   13.5         14.0   14.2        14.3   27.0
+                       Mn2 Nonlinear        24      15.4                    24.4   24.8     23.1     17.7   16.9         17.7   17.5        18.4   36.0
+                       Mp1 Paraboloid        3       2.1                     2.9    2.9      0.9      3.1    2.8          2.9    3.1         3.0    1.0
+                       Mp2 Paraboloid        6       2.7                     6.3    4.9      0.9      5.1    4.7          5.1    5.3         5.4    1.0
+                       Mp3 Paraboloid        9       3.1                     8.1    6.2      0.9      6.5    5.9          6.8    6.7         7.3    1.0
+                                        100
+                                                                                MiND–Full (DANCo)             MLE
+                                                                                TWO-NN                        MiND–ML
+                                         80
+                                                                                ESS
+            signed relative error (%)    60
+
+                                         40
+
+                                         20
+
+                                          0
+
+                                        −20
+
+                                        −40
+
+
+                                              1      2           4                10          20         40       70
+                                                                        true dimension d
+
+Figure S5: Signed relative error on the 24-manifold benchmark. Faint points are individual manifolds; lines are means by
+generating dimension. Color, line style, and marker jointly identify each estimator.
+
+
+
+
+S4.2      Clean component agreement
+Table S3 reports MPE and signed error for all eight objectives on the complete-case set of Main Section 4.2,
+the 14 manifolds whose preliminary MiND distance estimate exceeds five (Section S3.2).
+
+Table S3: Clean component comparison on 14 eligible manifolds over five shared reference replicates. Entries are mean ±
+standard deviation across replicates. MPE gives error magnitude; signed error retains direction, with negative values denoting
+underestimation. All eight objectives minimize a calibrated KL objective with fractional refinement.
+
+
+                                                  Objective             MPE (%)      Signed error (%)
+                                                  MiND distance-only    10.1 ± 0.2          −1.6 ± 0.3
+                                                  Gride distance-only   11.9 ± 0.6          −1.8 ± 0.4
+                                                  Full angle-only       15.9 ± 0.7         +10.7 ± 0.7
+                                                  Profiled angle-only   12.2 ± 0.3          +6.2 ± 0.2
+                                                  MiND–Full              8.6 ± 0.7          +0.9 ± 0.9
+                                                  MiND–Profiled          9.7 ± 0.2          −0.6 ± 0.2
+                                                  Gride–Full            11.6 ± 0.7          −1.2 ± 0.8
+                                                  Gride–Profiled        11.7 ± 0.4          −2.5 ± 0.3
+
+
+    All four combined objectives have lower observed mean MPE than either of their own components on
+matched clean geometry; for the two Gride objectives the margin over Gride distance-only is 0.2–0.3 MPE
+points, within one reference-replicate standard deviation. Both distance-only objectives sit below the gen-
+erating dimension and both angle-only objectives above it, matching the directions reported for the raw
+statistics in the original DANCo study [5]. The four combined objectives have mean signed errors within
+2.6 percentage points of zero, each closer to the corresponding distance-only mean signed error than to the
+angle-only one.
+    To interpret this pattern, note that equal objective weights need not imply equal local influence. Av-
+erages across manifolds should not be interpreted as convex combinations of the component averages; for
+an individual manifold whose component minima are sufficiently close, a local quadratic approximation
+makes this influence explicit. Along the candidate coordinate x = log m, write the combined objective as
+∆dist (x) + ∆ang (x), let xdist and xang be the minimizers of the two components, and let xjoint be the min-
+imizer of their sum, so that exp(xjoint ) is the estimate returned by the combined objective. Expand each
+
+
+                                                                          17
+component about its own minimum,
+
+        ∆dist (x) ≈ ∆dist (xdist ) + 21 Hdist (x − xdist )2 ,        ∆ang (x) ≈ ∆ang (xang ) + 12 Hang (x − xang )2 ,
+
+where Hdist = ∆′′dist (xdist ) and Hang = ∆′′ang (xang ). Setting the derivative of the sum of the two quadratic
+approximations to zero gives
+                                                   Hdist xdist + Hang xang
+                                         xjoint ≈                          .
+                                                         Hdist + Hang
+Thus, locally and when the two minima are nearby, the more strongly curved component has the greater
+influence on the joint minimum. To compare the component curvatures analytically, consider an exact match
+between an observed statistic and its reference value. There the divergence and its gradient vanish, so its
+second derivative in the reference parameter equals the Fisher information of the fitted law and the chain
+rule leaves no term from the curvature of the reference trajectory; the curvature of each component in x is
+therefore the Fisher information of its parameter times the squared rate at which the reference moves that
+parameter. The next proposition gives the corresponding Fisher informations.
+Proposition S4.1 (Fisher curvature of the distance and concentration parameters). (a) Under the local
+Poisson model of Section S1.1, let W = d log(rk2 /rk1 ) for neighbor orders k1 < k2 ; at (k1 , k2 ) = (1, k + 1)
+this is the MiND quantity −d log ρ. Then e−W ∼ Beta(k1 , k2 − k1 ) for every d, and the Fisher information
+of log d carried by the observed ratio is
+
+                                                             W 2 eW
+                                                                    
+                                  F = 1 + (k2 − k1 − 1) E              ≥ 1,                               (S4.1)
+                                                           (eW − 1)2
+
+with equality exactly for adjacent orders. (b) Under a von Mises law with concentration τ > 0, the Fisher
+information of log τ is C(τ ) = τ 2 A′ (τ ) > 0, which extends continuously to C(0) = 0 and satisfies C(τ ) → 1/2
+as τ → ∞.
+
+Proof. (a) Substituting v = µ−d in the Gride density of Main Eq. (2) gives v k1 −1 (1−v)k2 −k1 −1 /B(k2 −k1 , k1 )
+on (0, 1), the stated Beta law, which at (1, k + 1) is the MiND law ρd ∼ Beta(1, k). The observed log ratio
+W/d therefore has log density log d − k1 W + (k2 − k1 − 1) log(1 − e−W ) up to a constant, with score
+1 − k1 W + (k2 − k1 − 1)W/(eW − 1) in log d. Differentiating once more and using the zero mean of the
+score gives Eq. (S4.1) as the expected negative second derivative. The expectation in Eq. (S4.1) is positive
+because W > 0 almost surely, so F = 1 for adjacent orders and F > 1 otherwise.
+    (b) For τ > 0, with θ measured from the mean direction, the von Mises log density is τ cos θ−log{2πI0 (τ )},
+so the score of log τ is τ {cos θ − A(τ )} and C(τ ) = τ 2 Var(cos θ) = τ 2 A′ (τ ) > 0. The relations I0′ = I1 and
+I1′ = I0 − I1 /τ [2, Sec. 10.29] give A′ = 1 − A/τ − A2 , so with y = τ A, C = τ 2 − y − y 2 , and C → 0 as τ → 0.
+The large-argument expansions of I0 and I1 [2, Eq. 10.40.1] give A(τ ) = 1 − 1/(2τ ) − 1/(8τ 2 ) + O(τ −3 ), so
+y = τ − 1/2 − 1/(8τ ) + O(τ −2 ) and C(τ ) = 1/2 + O(τ −1 ).
+
+    This comparison becomes especially simple for Profiled calibration. For a smooth reference trajectory,
+let βd = d log dˆref                   ref
+                 m /dx and βτ = d log τm /dx be the local log-slopes at which the reference moves the two
+parameters along x = log m, with βd ̸= 0. At an exact component match, Proposition S4.1 gives the distance
+and Profiled angular curvatures
+                                    Hdist = Fβd2 ,     Hprof = C(τ̂ )βτ2 ,
+the latter, the Hang of the Profiled objective, because the Profiled angular term is a KL divergence between
+von Mises laws with aligned mean directions (Section S1.3). Their relative local influence is therefore
+summarized directly by
+                                                               2
+                                               Hprof    C(τ̂ ) βτ
+                                         R=          =                .
+                                               Hdist     F     βd
+                          ref                                                    ref
+At exact matching, τ̂ = τm    , so the candidate-wise diagnostic evaluates C at τm   . On the sampled reference
+curves, we estimate these local slopes as follows. The curves are the Monte Carlo references behind Table S3,
+rebuilt from the benchmark’s five calibration seeds at N = 2500 over m = 6, . . . , 100 and averaged over the
+replicates. At each sampled candidate m we estimate the two local log-slopes βd,m and βτ,m by separate
+
+
+                                                                18
+regressions of log dˆref        ref
+                     m and log τm on log m over the m ± 10 window, using the available candidates near the
+boundaries, and evaluate
+                                                    ref
+                                                               2
+                                                C(τm    ) βτ,m
+                                         Rm =                      ,
+                                                   F       βd,m
+where F comes from quadrature of Eq. (S4.1) and equals 5.86 for MiND at k = 10 and 4.79 for Gride at
+(k1 , k2 ) = (5, 10). On the clean-benchmark references used for Table S3, the maximum Rm is 0.31 for MiND
+and 0.38 for Gride; both remain below one under the wider m ± 20 window. These ratios are diagnostics
+on the sampled reference curves, not bounds on an underlying continuous derivative. Thus the distance
+component is locally more curved than the Profiled concentration component on these sampled references.
+                                                                                                           ref
+     At a match of both angular parameters, Full calibration adds the mean-direction curvature A(τ̂ )τ̂ (dνm   /dx)2
+to Hprof . Because the Profiled comparison does not control this additional term, its curvature ordering
+does not automatically extend to Full. This distinction is itself informative: Profiled isolates the con-
+centration contribution, whereas Full retains the additional location geometry. The proximity of the Full
+estimates to the distance-only values in Table S3 is therefore treated as an empirical pattern, whereas the
+sampled-reference diagnostics support stronger local distance influence for the Profiled combinations.
+
+S4.3      Sensitivity to neighborhood and sample size
+Table S4 reports the Main Section 4.2 neighborhood and sample-size sweeps for five methods.
+
+Table S4: MPE (%) across neighborhood and sample-size sweeps, each averaged over five data replicates. The first block varies
+k at N = 2500; the second varies N at k = 10.
+
+
+                 Setting    MiND–Full      Gride–Full    MiND–Profiled       Gride–Profiled     TWO-NN
+                 Neighborhood sweep (N = 2500)
+                      5         6.04        7.37                     5.84               6.45         11.91
+                     10         6.24        9.50                     6.73               9.39         11.91
+                     15         7.18       13.46                     7.60              13.53         11.91
+                     20         8.09       16.78                     8.49              16.91         11.91
+                 Sample-size sweep (k = 10)
+                    625         14.06            17.22              13.73              17.03         15.46
+                   1250          9.03            15.25               8.99              15.12         13.28
+                   2500          6.24             9.50               6.73               9.39         11.91
+                   5000          5.38             6.63               5.56               6.97         10.76
+
+
+   The two Gride variants track each other across both sweeps: Gride–Profiled is lower at k = 5, 10 and
+N = 625, 1250, 2500, while Gride–Full is lower at k = 15, 20 and N = 5000; their largest difference is 0.92
+MPE points. TWO-NN uses only the first two neighbor distances, so its column is constant across k by
+construction.
+
+S4.4      Neighborhood-relative noise
+The noise sweep identifies the crossover from MiND’s clean-data advantage to the benefit of larger-order
+Gride ratios. Table S5 reports all five noise levels.
+
+
+
+
+                                                             19
+Table S5: Neighborhood-relative Gaussian noise. Upper panel: MPE (%) of the four combined objectives over all 24 manifolds,
+with a final row at η = 0.4 restricted to the 17 manifolds that remain after excluding those with d > 5 and D ≤ d + 1.
+Lower panel: signed error (%) of all eight objectives on the 14-manifold complete-case set of Section S4.2, with negative values
+denoting underestimation. Entries are mean ± standard deviation over the ten data replicates of the noise design; its η = 0
+column therefore differs slightly from the five-replicate clean values of Table S3.
+
+
+                         η        MiND–Full         Gride–Full      MiND–Profiled     Gride–Profiled
+                         0       6.75 ± 0.41      9.39 ± 0.38          6.82 ± 0.38        9.41 ± 0.26
+                         0.05    7.67 ± 0.49      9.37 ± 0.34          7.69 ± 0.28        9.32 ± 0.28
+                         0.1    11.38 ± 0.93      9.16 ± 0.53         11.36 ± 0.69        9.05 ± 0.50
+                         0.2    16.48 ± 0.51     10.96 ± 0.55         15.84 ± 0.32       10.33 ± 0.65
+                         0.4    27.74 ± 0.77     17.64 ± 0.58         27.32 ± 0.94       16.96 ± 0.43
+                         Restricted subset: 17 manifolds (excluding d > 5 with D ≤ d + 1)
+                         0.4    37.62 ± 1.00 23.43 ± 0.66        36.93 ± 1.20    22.49 ± 0.40
+
+            Objective                       η=0          η = 0.05         η = 0.1         η = 0.2         η = 0.4
+            MiND distance-only        −1.0 ± 0.7      −0.4 ± 0.7       +0.4 ± 0.5     +2.1 ± 0.6     +12.0 ± 0.8
+            Gride distance-only       −2.1 ± 0.3      −1.9 ± 0.6       −1.3 ± 0.7     +1.4 ± 0.3      +8.7 ± 0.8
+            Full angle-only          +10.9 ± 1.1     +11.4 ± 0.7      +11.8 ± 0.9    +17.0 ± 1.9     +32.9 ± 1.2
+            Profiled angle-only       +6.2 ± 0.6      +6.8 ± 0.6       +8.7 ± 0.5    +12.3 ± 1.1     +24.1 ± 0.4
+            MiND–Full                 +1.4 ± 1.1      +1.6 ± 1.1       +2.2 ± 0.6     +4.6 ± 1.4     +14.7 ± 1.2
+            MiND–Profiled             +0.1 ± 0.8      +0.6 ± 0.5       +0.8 ± 0.5     +3.0 ± 0.6     +13.0 ± 1.6
+            Gride–Full                −1.1 ± 0.8      −0.5 ± 1.2       +1.1 ± 0.8     +5.7 ± 0.9     +12.8 ± 0.8
+            Gride–Profiled            −2.8 ± 0.4      −2.2 ± 0.9       −0.5 ± 0.7     +3.5 ± 1.0     +10.6 ± 0.7
+
+
+    Gride–Full overtakes MiND–Full between η = 0.05 and 0.1 and retains its advantage through the largest
+evaluated noise level, as its wider neighbor orders spread the added displacement over a longer baseline.
+Excluding the seven benchmark manifolds with d > 5 whose ambient dimension caps the candidate search
+at D ≤ d + 1 preserves this ordering at η = 0.4 (restricted-subset row of Table S5: Gride–Full 23.4% against
+MiND–Full 37.6% MPE).
+    The lower panel of Table S5 gives the direction of this effect on the 14-manifold complete-case subset
+on which all eight objectives are defined (Section S4.2): the signed mean error of every objective rises
+monotonically with η, and all eight are positive at η = 0.4, so noise inflates the estimates. The inflation
+is strongest for Full angle-only, from +10.9% at η = 0 to +32.9% at η = 0.4, and at η = 0.4 each Gride
+objective is less inflated than its MiND counterpart (Gride–Full +12.8% against +14.7% for MiND–Full, and
+Gride distance-only +8.7% against +12.0% for MiND distance-only). The direction matches the short-scale
+noise inflation described by Denti et al. [1], and the Gride ordering reflects the larger scale at which its ratio
+is read.
+
+S4.5      Profiling and distance drift under amplitude heterogeneity
+Table S6 gives all eight objectives, and Table S7 shows how the three MiND objectives change as amplitude
+heterogeneity increases across the image-class range. At the focal level σS = 0.25, no candidate reference
+mean direction lies below the observed one, so the angular-location penalty of Section S1.3 is paid at every
+candidate. Across five replicates its mean rises from 1.28 to 14.76 nats (KL divergence in natural-logarithm
+units) over m = 6, . . . , 100, increasing at 87.4 of the 94 candidate steps on average; this rising penalty is
+what pulls the Full minimum below the distance evidence in Table S7.
+
+
+
+
+                                                              20
+Table S6: Eight calibrated objectives on amplitude-heterogeneous GSM samples at d = 70 in D = 100, σS = 0.25, over 30
+replicates. Entries are mean ± standard deviation.
+
+
+                                  Objective                Estimated ID        MPE (%)
+                                  MiND distance-only        71.20 ± 1.75     2.48 ± 1.72
+                                  Gride distance-only       64.63 ± 1.59     7.67 ± 2.27
+                                  Full angle-only            6.26 ± 0.03    91.06 ± 0.05
+                                  Profiled angle-only       56.07 ± 3.26    19.90 ± 4.65
+                                  MiND–Full                 22.80 ± 1.76    67.43 ± 2.51
+                                  MiND–Profiled             66.67 ± 1.81     4.76 ± 2.58
+                                  Gride–Full                17.22 ± 1.64    75.40 ± 2.34
+                                  Gride–Profiled            61.17 ± 2.31    12.62 ± 3.29
+
+
+
+Table S7: Observed mean direction ν̂ and MiND estimates across the GSM amplitude sweep (d = 70 in D = 100; 30 replicates).
+Entries are mean ± standard deviation. The known-amplitude control at σS = 0.25 reuses the latent draws of the σS = 0 level,
+so its values are those of the σS = 0 row.
+
+
+                           σS                 ν̂   Distance-only             Full        Profiled
+                            0    1.137 ± 0.003      65.07 ± 1.01    71.90 ± 3.30    64.37 ± 0.89
+                          0.1    1.055 ± 0.008      64.17 ± 1.31    52.05 ± 3.23    62.83 ± 1.09
+                         0.15    0.980 ± 0.010      64.60 ± 1.30    35.87 ± 2.66    62.47 ± 1.25
+                          0.2    0.903 ± 0.012      66.93 ± 1.14    28.49 ± 2.50    63.83 ± 1.55
+                         0.25    0.832 ± 0.014      71.20 ± 1.75    22.80 ± 1.76    66.67 ± 1.81
+                          0.3    0.769 ± 0.014      76.97 ± 1.96    19.95 ± 1.55    70.20 ± 1.88
+                         0.35    0.715 ± 0.014      84.47 ± 2.16    18.08 ± 1.33    73.70 ± 2.49
+
+
+    As amplitude heterogeneity rises, Full moves away from the distance-only result while Profiled follows
+it, because profiling removes the angular-location penalty. In this controlled setting, profiling returns the
+combined estimate to the distance evidence, and Profiled then reflects only the distance and concentration
+discrepancies. The distance-only column of Table S7 also records an upward drift, from 65.07 to 84.47,
+produced by the same preferential selection of low-amplitude neighbors (Main Section 3.4 and Corollary S1.7).
+
+S4.6      Angular-reference transfer and normalization on images
+The raw CIFAR-10 and ImageNet mean directions lie below their reference ranges, and a Full–Profiled sep-
+aration accompanies the gap. Main Table 2 gives the raw statistics and estimates; Figure S6 shows the
+underlying objectives. For the fixed koala reference, angular discrepancy increases with candidate dimen-
+sion (Spearman correlation 0.998), consistent with the angular-location penalty of Main Section 3.1, which
+profiling removes exactly. The Full angular component reaches its minimum at m = 6, the Full objective at
+m = 21, and both the distance component and the Profiled objective at m = 45. The two panels connect
+these minima to the reference ranges in Table S1.
+
+Normalization controls and per-center geometry Reducing sample-amplitude variation moves the
+observed mean direction toward the reference range and narrows the Full–Profiled separation. Table S8
+reports the full normalization results, and Figure S7 shows the center-level relation for ImageNet koala.
+    In the generative model of Section S1.2 the amplitude Si multiplies every coordinate of observation i,
+and per-image contrast normalization divides by exactly such a per-observation scale: the Gaussian scale
+mixture reading of natural images treats contrast as the per-observation scale variable. Coordinate-wise
+standardization or range scaling instead applies a common translation and one diagonal rescaling to all
+observations. With equal scaling factors across coordinates this reduces to a single global rescaling, which
+leaves the coefficient of variation of centered norm, the neighbor selection, and the mean direction unchanged.
+
+
+
+
+                                                            21
+                (a) MNIST 3 (inside reference range)                                  (b) ImageNet koala (location mismatch)
+
+         101
+                                                                              100
+         100
+
+         10−1                                                                 10−2
+    KL
+
+
+
+
+         10−2                                                                                                                        distance
+                                                                              10−4
+                                                                                                                                     angular
+         10−3                                                                                                                        Full
+                                                                                                                                     Profiled
+                                                                              10−6
+                 0             50           100             150     200                0          50           100             150        200
+                                    candidate dimension m                                              candidate dimension m
+
+
+Figure S6: Complete KL analysis for MNIST digit 3 and ImageNet koala using one fixed reference replicate and the MiND
+distance model. The legend distinguishes components by color, line style, and marker; enlarged symbols mark the Full and
+Profiled joint minima.
+
+
+Table S8: Normalization controls. The observed-data mean direction and Full and Profiled estimates are reported for raw,
+centered-radial, and contrast-normalized data over five reference replicates. Full and Profiled denote MiND–Full and MiND–
+Profiled.
+
+
+                                                            raw               centered radial             contrast-norm.
+                     Dataset                       ν̂ Full Profiled            ν̂ Full Profiled            ν̂ Full Profiled
+                     MNIST 3                   1.166   20.4       20.2    1.198      20.2      20.0    1.135   20.8       20.8
+                     MNIST 7                   1.157   14.4       14.8    1.201      14.8      14.8    1.143   14.8       14.8
+                     CIFAR-10 bird             0.898   18.8       34.0    0.982      22.5      33.0    1.064   28.2       34.0
+                     CIFAR-10 cat              0.946   21.2       32.8    1.030      24.4      32.8    1.087   30.6       35.4
+                     ImageNet koala            0.934   24.9       45.0    1.028      40.6      53.4    1.080   72.2       70.0
+                     ImageNet butterfly        0.915   28.1       58.8    1.027      60.3      74.8    1.040   85.2      104.0
+
+
+    For CIFAR-10 and ImageNet, both normalizations raise ν̂ toward the reference range and narrow the
+Full–Profiled separation. MNIST begins inside its reference range, and its Full and Profiled estimates stay
+close under all transformations. Gride–Profiled shows the same upward shift under contrast normalization.
+    The centered-norm measure uses CV(a) defined in Section S3.5. Raw koala and butterfly have Pearson
+correlations of −0.60 between centered norm and per-center mean direction, while contrast normalization
+reduces the koala correlation to −0.03. Their centered-norm variation, CV(a) = 0.15–0.18, is also much
+larger than that of a uniform 70-ball sample (0.014). Together with the GSM control, these observations
+support amplitude variation as a substantial contributor to the image angular shift.
+
+Additional image classes The class survey examines whether low angular location extends beyond the
+examples analyzed in the Main paper.
+
+
+
+
+                                                                         22
+                             (a) ImageNet koala, raw                                          (b) contrast-normalized
+                                                                              r = −0.60                                                      r = −0.03
+
+                       1.2
+
+                                                                                     π/3                                                             π/3
+          ν̂ i (rad)
+
+
+
+                       1.0
+
+
+                       0.8
+
+
+
+                                0.50     0.75     1.00      1.25      1.50          1.75           0.950     0.975      1.000     1.025      1.050
+                                         normalized centered norm ai/ā                                     normalized centered norm ai/ā
+
+
+Figure S7: Per-center mean direction against normalized centered norm ai /ā for raw and contrast-normalized ImageNet koala
+data. Normalization largely removes the broad norm tail and weakens the negative relation. Solid lines are least-squares trends;
+the dashed horizontal line marks π/3, and r denotes the Pearson correlation between centered norm and per-center mean
+direction.
+
+
+Table S9: Per-class angular statistics at k = 10. Here r is the Pearson correlation between per-center mean direction and
+centered norm, and CV(a) is the population standard deviation of ai = ∥xi − x̄∥2 divided by their mean, with x̄ the class mean.
+ImageNet class codes are WordNet synset identifiers.
+
+
+                                Source          Class                     N               D         ν̂     CV(a)      r(ν̂i , ∥xi − x̄∥)
+                                CIFAR-10        airplane            5000           3072        0.939       0.291                   -0.08
+                                CIFAR-10        automobile          5000           3072        1.037       0.219                   -0.04
+                                CIFAR-10        bird                5000           3072        0.898       0.330                   -0.10
+                                CIFAR-10        cat                 5000           3072        0.946       0.256                   -0.08
+                                CIFAR-10        deer                5000           3072        0.903       0.312                   -0.13
+                                CIFAR-10        dog                 5000           3072        0.938       0.243                   -0.10
+                                CIFAR-10        frog                5000           3072        0.917       0.320                    0.08
+                                CIFAR-10        horse               5000           3072        0.986       0.240                   -0.25
+                                CIFAR-10        ship                5000           3072        0.936       0.279                   -0.08
+                                CIFAR-10        truck               5000           3072        1.022       0.196                   -0.33
+                                ImageNet        n01882714            547         150528        0.934       0.180                   -0.60
+                                ImageNet        n02086240            548         150528        0.940       0.200                   -0.50
+                                ImageNet        n02087394            947         150528        0.900       0.222                   -0.39
+                                ImageNet        n02094433            766         150528        0.982       0.196                   -0.53
+                                ImageNet        n02100583            826         150528        0.892       0.240                   -0.33
+                                ImageNet        n02100735            614         150528        0.912       0.201                   -0.15
+                                ImageNet        n02279972            648         150528        0.915       0.149                   -0.60
+
+
+   Fifteen of the 17 classes in Table S9 have ν̂ < 1.0, and within CIFAR-10 the two exceptions also have
+the smallest centered-norm spread, consistent with an amplitude effect on angular location.
+
+S4.7      Layer-wise CNN profiles
+Table S10 reports, for each architecture, the interior peak of the median Gride–Profiled curve together
+with the largest magnitude of the median paired difference between Gride–Full and Gride–Profiled; that
+largest difference coincides with the peak in every architecture. Relative depth follows the definition of
+Section S3.7. On AlexNet, the TWO-NN medians over the seven categories of the first subsample at the
+input, the three max-pooling checkpoints, and the three linear layers (29.7, 69.1, 65.3, 38.6, 28.0, 21.7, 17.2)
+closely reproduce the class-averaged profile reported by Ansuini et al. [15, Fig. 3A]. Layer medians of the
+observed mean direction ν̂ range from 0.780 to 1.106 over the four networks: they lie at 0.78–0.87 at the first
+
+
+                                                                                     23
+pooling checkpoint of each network, rise through depth, and reach 1.04–1.11 at the output layer. There the
+median paired Full−Profiled difference is at most six dimensions (Table S10, lower panel).
+
+Table S10: Peak of the median Gride–Profiled curve across seven categories and three subsamples. Full and Profiled denote
+Gride–Full and Gride–Profiled, and the largest absolute difference between them occurs at the same layer in each architecture.
+The last column is the median of the per-cell paired Full−Profiled differences across category–subsample cells, not the difference
+of the two reported medians. Layer names denote mathematical checkpoints along the sequence of network transformations.
+Lower panel: mean direction at the first pooling checkpoint and at the output layer, with the output medians of both objectives
+and their paired difference.
+
+
+      Architecture Peak layer                            depth (%)        ν̂ Full Profiled Median paired Full−Profiled
+      AlexNet        second max-pooling checkpoint              22.2 0.800    17        115                             -100
+      VGG-16         second max-pooling checkpoint              23.5 0.802    18        197                             -179
+      ResNet-18      second residual stage                      47.4 0.916    37        248                             -214
+      ResNet-34      second residual stage                      42.9 0.919    37        245                             -208
+
+           Architecture ν̂ first pooling ν̂ output Full output Profiled output Median paired Full−Profiled
+           AlexNet                  0.801      1.106            22                 22                              -1
+           VGG-16                   0.780      1.106            18                 20                              -2
+           ResNet-18                0.873      1.069            29                 33                              -4
+           ResNet-34                0.855      1.038            24                 31                              -6
+
+
+
+References
+ [1] F. Denti, D. Doimo, A. Laio, A. Mira, The generalized ratios intrinsic dimension estimator, Scientific
+     Reports 12 (1) (2022) 20005. doi:10.1038/s41598-022-20991-1.
+ [2] F. W. J. Olver, D. W. Lozier, R. F. Boisvert, C. W. Clark (Eds.), NIST Handbook of Mathematical
+     Functions, Cambridge University Press, 2010.
+ [3] M. Meilă, H. Zhang, Manifold learning: What, how, and why, Annual Review of Statistics and Its
+     Application 11 (2024) 393–417. doi:10.1146/annurev-statistics-040522-115238.
+ [4] T. Cai, J. Fan, T. Jiang, Distributions of angles in random packing on spheres, Journal of Machine
+     Learning Research 14 (2013) 1837–1864.
+
+ [5] C. Ceruti, S. Bassis, A. Rozza, G. Lombardi, E. Casiraghi, P. Campadelli, DANCo: An intrinsic di-
+     mensionality estimator exploiting angle and norm concentration, Pattern Recognition 47 (8) (2014)
+     2569–2581. doi:10.1016/j.patcog.2014.02.013.
+ [6] E. Thordsen, E. Schubert, ABID: Angle based intrinsic dimensionality — theory and analysis, Informa-
+     tion Systems 108 (2022) 101989. doi:10.1016/j.is.2022.101989.
+ [7] P. Hall, J. S. Marron, A. Neeman, Geometric representation of high dimension, low sample size data,
+     Journal of the Royal Statistical Society: Series B 67 (3) (2005) 427–444. doi:10.1111/j.1467-9868.
+     2005.00510.x.
+ [8] A. Blum, J. Hopcroft, R. Kannan, Foundations of Data Science, Cambridge University Press, 2020.
+     doi:10.1017/9781108755528.
+ [9] A. P. N. Vo, S. Oraintara, T. T. Nguyen, Statistical image modeling using von Mises distribution in the
+     complex directional wavelet domain, in: 2008 IEEE International Symposium on Circuits and Systems
+     (ISCAS), 2008, pp. 2885–2888. doi:10.1109/ISCAS.2008.4542060.
+
+[10] N. I. Fisher, Statistical Analysis of Circular Data, Cambridge University Press, Cambridge, 1993. doi:
+     10.1017/CBO9780511564345.
+
+
+
+                                                               24
+[11] J. Bac, E. M. Mirkes, A. N. Gorban, I. Tyukin, A. Zinovyev, Scikit-dimension: A Python package for
+     intrinsic dimension estimation, Entropy 23 (10) (2021) 1368. doi:10.3390/e23101368.
+[12] Y. LeCun, L. Bottou, Y. Bengio, P. Haffner, Gradient-based learning applied to document recognition,
+     Proceedings of the IEEE 86 (11) (1998) 2278–2324. doi:10.1109/5.726791.
+
+[13] A. Krizhevsky, Learning multiple layers of features from tiny images, Tech. rep., University of Toronto
+     (2009).
+[14] O. Russakovsky, J. Deng, H. Su, J. Krause, S. Satheesh, S. Ma, Z. Huang, A. Karpathy, A. Khosla,
+     M. Bernstein, A. C. Berg, L. Fei-Fei, ImageNet large scale visual recognition challenge, International
+     Journal of Computer Vision 115 (3) (2015) 211–252. doi:10.1007/s11263-015-0816-y.
+
+[15] A. Ansuini, A. Laio, J. H. Macke, D. Zoccolan, Intrinsic dimension of data representations in deep
+     neural networks, in: Advances in Neural Information Processing Systems, Vol. 32, 2019, pp. 6111–6122.
+[16] A. Krizhevsky, I. Sutskever, G. E. Hinton, ImageNet classification with deep convolutional neural net-
+     works, in: Advances in Neural Information Processing Systems, Vol. 25, 2012.
+
+[17] K. Simonyan, A. Zisserman, Very deep convolutional networks for large-scale image recognition, in:
+     International Conference on Learning Representations (ICLR), 2015.
+[18] K. He, X. Zhang, S. Ren, J. Sun, Deep residual learning for image recognition, in: IEEE Conference on
+     Computer Vision and Pattern Recognition (CVPR), 2016, pp. 770–778.
+
+
+
+
+                                                    25
+
