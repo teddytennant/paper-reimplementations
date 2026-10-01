@@ -2,11 +2,11 @@
 //!
 //! Implements the compact representation of inclusion-wise minimal set covers
 //! (Solve / Algorithm 1), connected set cover via that representation and a
-//! group Steiner tree, the grouping core, and the polynomial lossy compression
-//! for Conn-DS.
+//! group Steiner tree, the grouping core, and Conn-DS by a group Steiner tree
+//! in the input graph. Theorem 4's lossy compression is not implemented.
 
 use std::cmp::Reverse;
-use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap};
+use std::collections::{BTreeSet, BinaryHeap, HashMap};
 
 /// Undirected simple graph on vertices `0..n-1`.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -217,10 +217,7 @@ pub fn closed_neighborhood_system(g: &Graph) -> SetSystem {
         s.extend(g.neighbors(v).iter().copied());
         sets.push(s);
     }
-    SetSystem {
-        universe: n,
-        sets,
-    }
+    SetSystem { universe: n, sets }
 }
 
 /// Smallest `q` such that the closed-neighborhood family is `(q+1)`-semi-ladder-free.
@@ -470,11 +467,7 @@ pub fn group_steiner_tree(g: &Graph, groups: &[Vec<usize>]) -> Option<Vec<usize>
     }
     let mut cleaned = Vec::with_capacity(groups.len());
     for group in groups {
-        let mut gs: Vec<usize> = group
-            .iter()
-            .copied()
-            .filter(|&v| v < g.n())
-            .collect();
+        let mut gs: Vec<usize> = group.iter().copied().filter(|&v| v < g.n()).collect();
         gs.sort_unstable();
         gs.dedup();
         if gs.is_empty() {
@@ -497,14 +490,31 @@ pub fn group_steiner_tree(g: &Graph, groups: &[Vec<usize>]) -> Option<Vec<usize>
         }
         terminals.push(t);
     }
-    let tree = steiner_vertices(&augmented, &terminals)?;
-    let mut real: Vec<usize> = tree.into_iter().filter(|&v| v < g.n()).collect();
-    real.sort_unstable();
-    real.dedup();
-    if real.is_empty() {
-        return None;
+    // Dummy terminals are leaves only. Routing through a dummy would treat two
+    // of its group members as adjacent even when G has no such edge.
+    let mut leaf_only = vec![false; augmented.n()];
+    for &t in &terminals {
+        leaf_only[t] = true;
     }
-    Some(real)
+    if let Some(tree) = steiner_vertices(&augmented, &terminals, &leaf_only) {
+        let mut real: Vec<usize> = tree.into_iter().filter(|&v| v < g.n()).collect();
+        real.sort_unstable();
+        real.dedup();
+        if group_tree_ok(g, &cleaned, &real) {
+            return Some(real);
+        }
+    }
+    steiner_fallback(g, &cleaned)
+}
+
+fn group_tree_ok(g: &Graph, groups: &[Vec<usize>], verts: &[usize]) -> bool {
+    if verts.is_empty() || !set_is_connected(g, verts) {
+        return false;
+    }
+    let chosen: BTreeSet<usize> = verts.iter().copied().collect();
+    groups
+        .iter()
+        .all(|group| group.iter().any(|v| chosen.contains(v)))
 }
 
 fn steiner_fallback(g: &Graph, groups: &[Vec<usize>]) -> Option<Vec<usize>> {
@@ -524,8 +534,11 @@ fn steiner_fallback(g: &Graph, groups: &[Vec<usize>]) -> Option<Vec<usize>> {
     ) {
         if i == groups.len() {
             let terminals: Vec<usize> = choice.to_vec();
-            if let Some(tree) = steiner_vertices(g, &terminals) {
-                if best.as_ref().map(|b| tree.len() < b.len() || (tree.len() == b.len() && tree < *b)).unwrap_or(true)
+            if let Some(tree) = steiner_vertices(g, &terminals, &[]) {
+                if best
+                    .as_ref()
+                    .map(|b| tree.len() < b.len() || (tree.len() == b.len() && tree < *b))
+                    .unwrap_or(true)
                 {
                     *best = Some(tree);
                 }
@@ -541,7 +554,7 @@ fn steiner_fallback(g: &Graph, groups: &[Vec<usize>]) -> Option<Vec<usize>> {
     best
 }
 
-fn steiner_vertices(g: &Graph, terminals: &[usize]) -> Option<Vec<usize>> {
+fn steiner_vertices(g: &Graph, terminals: &[usize], leaf_only: &[bool]) -> Option<Vec<usize>> {
     let n = g.n();
     let ell = terminals.len();
     if ell == 0 {
@@ -585,6 +598,9 @@ fn steiner_vertices(g: &Graph, terminals: &[usize]) -> Option<Vec<usize>> {
                     continue;
                 }
                 for v in 0..n {
+                    if leaf_only.get(v).copied().unwrap_or(false) {
+                        continue;
+                    }
                     let cost = dp[sub][v].saturating_add(dp[other][v]);
                     if cost < dp[mask][v] {
                         dp[mask][v] = cost;
@@ -609,6 +625,9 @@ fn steiner_vertices(g: &Graph, terminals: &[usize]) -> Option<Vec<usize>> {
             }
             seen[v] = true;
             for &u in g.neighbors(v) {
+                if leaf_only.get(u).copied().unwrap_or(false) {
+                    continue;
+                }
                 let nd = d.saturating_add(1);
                 if nd < dist[u] {
                     dist[u] = nd;
@@ -629,6 +648,9 @@ fn steiner_vertices(g: &Graph, terminals: &[usize]) -> Option<Vec<usize>> {
     let mut best_v = None;
     let mut best_c = inf;
     for v in 0..n {
+        if leaf_only.get(v).copied().unwrap_or(false) {
+            continue;
+        }
         if dp[full][v] < best_c {
             best_c = dp[full][v];
             best_v = Some(v);
@@ -712,7 +734,11 @@ fn intersection_graph(system: &SetSystem) -> Graph {
     let mut g = Graph::new(m);
     for i in 0..m {
         for j in (i + 1)..m {
-            if system.sets[i].intersection(&system.sets[j]).next().is_some() {
+            if system.sets[i]
+                .intersection(&system.sets[j])
+                .next()
+                .is_some()
+            {
                 g.add_edge(i, j);
             }
         }
@@ -915,587 +941,6 @@ fn maximal_disjoint(cands: &[Vec<usize>]) -> Vec<Vec<usize>> {
     picked
 }
 
-/// Result of the lossy Conn-DS compression, with enough origin data to lift a solution.
-#[derive(Clone, Debug)]
-pub struct LossyInstance {
-    pub graph: Graph,
-    /// Original vertices represented by each compressed-graph vertex.
-    pub origin: Vec<Vec<usize>>,
-    pub heavy: Vec<bool>,
-}
-
-pub fn lossy_cds_compression(g: &Graph, k: usize, d: usize, eps: f64) -> Graph {
-    lossy_cds_compression_instance(g, k, d, eps).graph
-}
-
-pub fn lossy_cds_compression_instance(g: &Graph, k: usize, d: usize, eps: f64) -> LossyInstance {
-    if g.n() == 0 {
-        return LossyInstance {
-            graph: Graph::new(0),
-            origin: Vec::new(),
-            heavy: Vec::new(),
-        };
-    }
-    let t = if eps.is_finite() && eps > 0.0 {
-        ((8.0 / eps).ceil() as usize).max(1)
-    } else {
-        1
-    };
-    let (dom_core, grouped) = dominator_and_grouped_cores(g, k, d);
-    let original_n = g.n();
-    let mut ghat = g.clone();
-    let mut heavy_ids = Vec::new();
-    let mut heavy_batches = Vec::new();
-    let mut nonheavy = Vec::new();
-    for batch in &grouped {
-        if batch.len() >= 2 {
-            let w = ghat.add_vertex();
-            for x in 0..original_n {
-                if batch.iter().all(|&b| g.is_edge(x, b)) {
-                    ghat.add_edge(w, x);
-                }
-            }
-            heavy_ids.push(w);
-            heavy_batches.push(batch.clone());
-        } else if batch.len() == 1 {
-            nonheavy.push(batch[0]);
-        }
-    }
-    let mut marked = BTreeSet::new();
-    let class_count = dom_core.len();
-    let max_q = (2 * t).min(class_count);
-    let mut subset = Vec::new();
-    let mut enumerated = 0usize;
-    const ENUM_CAP: usize = 20_000;
-    fn walk(
-        start: usize,
-        class_count: usize,
-        max_q: usize,
-        dom_core: &[Vec<usize>],
-        ghat: &Graph,
-        t: usize,
-        marked: &mut BTreeSet<usize>,
-        subset: &mut Vec<usize>,
-        enumerated: &mut usize,
-    ) {
-        if !subset.is_empty() && *enumerated < ENUM_CAP {
-            *enumerated += 1;
-            let groups: Vec<Vec<usize>> = subset.iter().map(|&i| dom_core[i].clone()).collect();
-            if let Some(tree) = group_steiner_tree(ghat, &groups) {
-                if tree.len() <= 2 * t {
-                    marked.extend(tree);
-                }
-            }
-        }
-        if subset.len() == max_q || *enumerated >= ENUM_CAP {
-            return;
-        }
-        for i in start..class_count {
-            subset.push(i);
-            walk(
-                i + 1,
-                class_count,
-                max_q,
-                dom_core,
-                ghat,
-                t,
-                marked,
-                subset,
-                enumerated,
-            );
-            subset.pop();
-        }
-    }
-    if class_count > 0 && max_q > 0 {
-        walk(
-            0,
-            class_count,
-            max_q,
-            &dom_core,
-            &ghat,
-            t,
-            &mut marked,
-            &mut subset,
-            &mut enumerated,
-        );
-    }
-    let marked_orig: Vec<usize> = marked.iter().copied().filter(|&v| v < original_n).collect();
-    if !is_dominating_set(g, &marked_orig) {
-        // Trivial NO-instance (parameter k = 0 in the paper): one vertex, no empty solution.
-        return LossyInstance {
-            graph: Graph::new(1),
-            origin: vec![vec![]],
-            heavy: vec![false],
-        };
-    }
-    let connectors = connect_vertices(g, &marked_orig);
-    let mut keep = BTreeSet::new();
-    keep.extend(marked_orig.iter().copied());
-    keep.extend(connectors.iter().copied());
-    keep.extend(nonheavy.iter().copied());
-    keep.extend(heavy_ids.iter().copied());
-    // Batch members that are not otherwise kept stay out; heavy vertices represent them.
-    let keep_vec: Vec<usize> = keep.into_iter().collect();
-    let (graph, _) = ghat.induced(&keep_vec);
-    let mut origin = Vec::with_capacity(keep_vec.len());
-    let mut heavy = Vec::with_capacity(keep_vec.len());
-    for &old in &keep_vec {
-        if let Some(pos) = heavy_ids.iter().position(|&h| h == old) {
-            origin.push(heavy_batches[pos].clone());
-            heavy.push(true);
-        } else if old < original_n {
-            origin.push(vec![old]);
-            heavy.push(false);
-        } else {
-            origin.push(Vec::new());
-            heavy.push(false);
-        }
-    }
-    LossyInstance {
-        graph,
-        origin,
-        heavy,
-    }
-}
-
-/// Replace heavy vertices in a connected dominating set of the compressed graph
-/// by original vertices, preserving connectivity and domination.
-pub fn lift_connected_dominating_set(
-    inst: &LossyInstance,
-    solution: &[usize],
-    original: &Graph,
-) -> Option<Vec<usize>> {
-    if solution.iter().any(|&v| v >= inst.graph.n()) {
-        return None;
-    }
-    if inst.origin.iter().any(|o| o.is_empty()) && solution.iter().any(|&v| inst.origin[v].is_empty())
-    {
-        return None;
-    }
-    let mut current = solution.to_vec();
-    current.sort_unstable();
-    current.dedup();
-    if let Some(pos) = current.iter().position(|&v| inst.heavy.get(v).copied().unwrap_or(false))
-    {
-        let h = current[pos];
-        let batch = inst.origin.get(h)?.clone();
-        if batch.is_empty() {
-            return None;
-        }
-        let replacement = if current.len() == 1 {
-            vertex_dominating_batch(original, &batch)?
-        } else {
-            batch[0]
-        };
-        // Map replacement into the compressed graph if it is present; otherwise
-        // record it as a synthetic original id by finishing in original space.
-        current.remove(pos);
-        // Switch to original-id lifting from here.
-        let mut orig_sol = Vec::new();
-        for &v in &current {
-            if inst.heavy.get(v).copied().unwrap_or(false) {
-                let b = inst.origin.get(v)?.clone();
-                if b.is_empty() {
-                    return None;
-                }
-                orig_sol.push(b[0]);
-            } else {
-                let o = inst.origin.get(v)?;
-                if o.len() != 1 {
-                    return None;
-                }
-                orig_sol.push(o[0]);
-            }
-        }
-        orig_sol.push(replacement);
-        // Replace any remaining heavy pieces already expanded. `current` was
-        // expanded above, so `orig_sol` is entirely original vertices.
-        orig_sol.sort_unstable();
-        orig_sol.dedup();
-        return Some(orig_sol);
-    }
-    let mut orig_sol = Vec::new();
-    for &v in &current {
-        let o = inst.origin.get(v)?;
-        if o.len() != 1 {
-            return None;
-        }
-        orig_sol.push(o[0]);
-    }
-    orig_sol.sort_unstable();
-    orig_sol.dedup();
-    Some(orig_sol)
-}
-
-fn vertex_dominating_batch(g: &Graph, batch: &[usize]) -> Option<usize> {
-    if batch.is_empty() {
-        return None;
-    }
-    for v in 0..g.n() {
-        if batch.iter().all(|&b| v == b || g.is_edge(v, b)) {
-            return Some(v);
-        }
-    }
-    None
-}
-
-fn connect_vertices(g: &Graph, seeds: &[usize]) -> Vec<usize> {
-    if seeds.is_empty() {
-        return Vec::new();
-    }
-    let mut owned: BTreeSet<usize> = seeds.iter().copied().collect();
-    loop {
-        let comps = induced_components(g, &owned.iter().copied().collect::<Vec<_>>());
-        if comps.len() <= 1 {
-            break;
-        }
-        let mut best: Option<Vec<usize>> = None;
-        for a in &comps[0] {
-            for other in &comps[1..] {
-                for &b in other {
-                    if let Some(path) = shortest_path(g, *a, b) {
-                        if best.as_ref().map(|p| path.len() < p.len()).unwrap_or(true) {
-                            best = Some(path);
-                        }
-                    }
-                }
-            }
-        }
-        let Some(path) = best else {
-            break;
-        };
-        for v in path {
-            owned.insert(v);
-        }
-    }
-    owned
-        .into_iter()
-        .filter(|v| !seeds.contains(v))
-        .collect()
-}
-
-fn shortest_path(g: &Graph, s: usize, t: usize) -> Option<Vec<usize>> {
-    if s == t {
-        return Some(vec![s]);
-    }
-    let mut prev = vec![usize::MAX; g.n()];
-    let mut q = std::collections::VecDeque::new();
-    q.push_back(s);
-    prev[s] = s;
-    while let Some(v) = q.pop_front() {
-        for &u in g.neighbors(v) {
-            if prev[u] == usize::MAX {
-                prev[u] = v;
-                if u == t {
-                    let mut path = vec![t];
-                    let mut cur = t;
-                    while cur != s {
-                        cur = prev[cur];
-                        path.push(cur);
-                    }
-                    path.reverse();
-                    return Some(path);
-                }
-                q.push_back(u);
-            }
-        }
-    }
-    None
-}
-
-fn induced_components(g: &Graph, verts: &[usize]) -> Vec<Vec<usize>> {
-    let set: BTreeSet<usize> = verts.iter().copied().collect();
-    let mut seen = BTreeSet::new();
-    let mut comps = Vec::new();
-    for &start in verts {
-        if !seen.insert(start) {
-            continue;
-        }
-        let mut comp = vec![start];
-        let mut q = std::collections::VecDeque::new();
-        q.push_back(start);
-        while let Some(v) = q.pop_front() {
-            for &u in g.neighbors(v) {
-                if set.contains(&u) && seen.insert(u) {
-                    comp.push(u);
-                    q.push_back(u);
-                }
-            }
-        }
-        comp.sort_unstable();
-        comps.push(comp);
-    }
-    comps
-}
-
-struct CoreState {
-    n_u: usize,
-    sets: Vec<BTreeSet<usize>>,
-    f: Vec<Vec<usize>>,
-    g: Vec<Vec<usize>>,
-}
-
-fn dominator_and_grouped_cores(g: &Graph, k: usize, d: usize) -> (Vec<Vec<usize>>, Vec<Vec<usize>>) {
-    let n = g.n();
-    let mut sets = Vec::with_capacity(n);
-    let mut f = Vec::with_capacity(n);
-    let mut gv = Vec::with_capacity(n);
-    for v in 0..n {
-        let mut s = BTreeSet::new();
-        s.insert(v);
-        s.extend(g.neighbors(v).iter().copied());
-        sets.push(s);
-        f.push(vec![v]);
-        gv.push(vec![v]);
-    }
-    let mut state = CoreState {
-        n_u: n,
-        sets,
-        f,
-        g: gv,
-    };
-    for _ in 0..=n {
-        let threshold = pow_bounded(k, d).unwrap_or(usize::MAX);
-        if state.n_u <= threshold {
-            break;
-        }
-        let closure = intersection_closure(&state.sets, state.n_u);
-        let ell = chain_lengths(&closure);
-        let mut best: Option<(usize, BTreeSet<usize>)> = None;
-        for s in &closure {
-            let l = ell.get(s).copied().unwrap_or(0);
-            let bound = pow_bounded(k, l).unwrap_or(usize::MAX);
-            if s.len() > bound {
-                match &best {
-                    None => best = Some((l, s.clone())),
-                    Some((bl, bs)) => {
-                        if l < *bl || (l == *bl && s < bs) {
-                            best = Some((l, s.clone()));
-                        }
-                    }
-                }
-            }
-        }
-        let Some((_, s)) = best else {
-            break;
-        };
-        if s.len() < 2 {
-            break;
-        }
-        let next = group_state(&state, &s);
-        if next.n_u >= state.n_u {
-            break;
-        }
-        state = next;
-    }
-    let mut dom = Vec::new();
-    let mut seen_f = BTreeSet::new();
-    for img in &state.f {
-        if img.is_empty() {
-            continue;
-        }
-        let mut key = img.clone();
-        key.sort_unstable();
-        key.dedup();
-        if seen_f.insert(key.clone()) {
-            dom.push(key);
-        }
-    }
-    // Merge overlapping images so the core is pairwise disjoint.
-    dom = disjointify(dom);
-    let mut grouped = Vec::new();
-    for img in &state.g {
-        if img.is_empty() {
-            continue;
-        }
-        let mut key = img.clone();
-        key.sort_unstable();
-        key.dedup();
-        grouped.push(key);
-    }
-    grouped = disjointify(grouped);
-    if grouped.is_empty() && n > 0 {
-        grouped = (0..n).map(|v| vec![v]).collect();
-    }
-    if dom.is_empty() && n > 0 {
-        dom = (0..n).map(|v| vec![v]).collect();
-    }
-    (dom, grouped)
-}
-
-fn disjointify(mut parts: Vec<Vec<usize>>) -> Vec<Vec<usize>> {
-    // Union pieces that share a vertex.
-    let mut changed = true;
-    while changed {
-        changed = false;
-        let mut next = Vec::new();
-        let mut used = vec![false; parts.len()];
-        for i in 0..parts.len() {
-            if used[i] {
-                continue;
-            }
-            let mut acc: BTreeSet<usize> = parts[i].iter().copied().collect();
-            used[i] = true;
-            let mut grew = true;
-            while grew {
-                grew = false;
-                for j in 0..parts.len() {
-                    if used[j] {
-                        continue;
-                    }
-                    if parts[j].iter().any(|v| acc.contains(v)) {
-                        acc.extend(parts[j].iter().copied());
-                        used[j] = true;
-                        grew = true;
-                        changed = true;
-                    }
-                }
-            }
-            next.push(acc.into_iter().collect());
-        }
-        parts = next;
-    }
-    parts
-}
-
-fn group_state(state: &CoreState, s: &BTreeSet<usize>) -> CoreState {
-    let mut map = vec![usize::MAX; state.n_u];
-    let mut g_new = Vec::new();
-    let mut union_g = BTreeSet::new();
-    for &u in s {
-        if u < state.g.len() {
-            union_g.extend(state.g[u].iter().copied());
-        }
-    }
-    g_new.push(union_g.into_iter().collect());
-    let mut next_id = 1usize;
-    for u in 0..state.n_u {
-        if s.contains(&u) {
-            continue;
-        }
-        map[u] = next_id;
-        next_id += 1;
-        if u < state.g.len() {
-            g_new.push(state.g[u].clone());
-        } else {
-            g_new.push(Vec::new());
-        }
-    }
-    let mut merged: BTreeMap<Vec<usize>, Vec<usize>> = BTreeMap::new();
-    for (i, set) in state.sets.iter().enumerate() {
-        let contains = s.iter().all(|u| set.contains(u));
-        let mut image = Vec::new();
-        for &u in set {
-            if s.contains(&u) {
-                continue;
-            }
-            if u < map.len() && map[u] != usize::MAX {
-                image.push(map[u]);
-            }
-        }
-        if contains {
-            image.push(0);
-        }
-        image.sort_unstable();
-        image.dedup();
-        let entry = merged.entry(image).or_default();
-        if i < state.f.len() {
-            entry.extend(state.f[i].iter().copied());
-        }
-    }
-    let mut sets = Vec::new();
-    let mut f = Vec::new();
-    for (image, mut verts) in merged {
-        let image_set: BTreeSet<usize> = image.into_iter().collect();
-        verts.sort_unstable();
-        verts.dedup();
-        sets.push(image_set);
-        f.push(verts);
-    }
-    CoreState {
-        n_u: next_id,
-        sets,
-        f,
-        g: g_new,
-    }
-}
-
-fn intersection_closure(sets: &[BTreeSet<usize>], n_u: usize) -> Vec<BTreeSet<usize>> {
-    let mut closure: BTreeSet<BTreeSet<usize>> = BTreeSet::new();
-    closure.insert(BTreeSet::new());
-    closure.insert((0..n_u).collect());
-    let m = sets.len();
-    if m <= 18 {
-        let limit = 1usize << m;
-        for mask in 1..limit {
-            let mut inter: Option<BTreeSet<usize>> = None;
-            let mut empty = false;
-            for i in 0..m {
-                if mask & (1usize << i) == 0 {
-                    continue;
-                }
-                inter = Some(match &inter {
-                    None => sets[i].clone(),
-                    Some(prev) => {
-                        let next: BTreeSet<usize> = prev.intersection(&sets[i]).copied().collect();
-                        if next.is_empty() {
-                            empty = true;
-                        }
-                        next
-                    }
-                });
-                if empty {
-                    break;
-                }
-            }
-            if let Some(s) = inter {
-                closure.insert(s);
-            }
-        }
-    } else {
-        for s in sets {
-            closure.insert(s.clone());
-        }
-        let mut changed = true;
-        let mut rounds = 0;
-        while changed && rounds < n_u + 2 {
-            changed = false;
-            rounds += 1;
-            let current: Vec<_> = closure.iter().cloned().collect();
-            for i in 0..current.len() {
-                for j in (i + 1)..current.len() {
-                    let inter: BTreeSet<usize> =
-                        current[i].intersection(&current[j]).copied().collect();
-                    if closure.insert(inter) {
-                        changed = true;
-                    }
-                }
-            }
-        }
-    }
-    closure.into_iter().collect()
-}
-
-fn chain_lengths(closure: &[BTreeSet<usize>]) -> HashMap<BTreeSet<usize>, usize> {
-    let mut ordered = closure.to_vec();
-    ordered.sort_by_key(|s| s.len());
-    let mut ell = HashMap::new();
-    for s in &ordered {
-        if s.is_empty() {
-            ell.insert(s.clone(), 0);
-            continue;
-        }
-        let mut best = 0usize;
-        for (t, &lt) in &ell {
-            if t.len() < s.len() && t.is_subset(s) {
-                best = best.max(lt + 1);
-            }
-        }
-        ell.insert(s.clone(), best.max(1));
-    }
-    ell
-}
-
 // --- Graph predicates and domination numbers ---------------------------------
 
 pub fn is_complete(g: &Graph) -> bool {
@@ -1593,7 +1038,9 @@ pub fn is_connected_dominating_set(g: &Graph, set: &[usize]) -> bool {
     if !is_connected(g) {
         return false;
     }
-    !s.is_empty() && set_is_connected(g, &s.iter().copied().collect::<Vec<_>>()) && is_dominating_set(g, &s.iter().copied().collect::<Vec<_>>())
+    !s.is_empty()
+        && set_is_connected(g, &s.iter().copied().collect::<Vec<_>>())
+        && is_dominating_set(g, &s.iter().copied().collect::<Vec<_>>())
 }
 
 pub fn dominating_set_size(g: &Graph, set: &[usize]) -> Option<usize> {
@@ -1715,68 +1162,59 @@ pub fn connected_domination_number(g: &Graph) -> Option<usize> {
     minimum_connected_dominating_set(g).map(|s| s.len())
 }
 
-pub fn minimum_connected_dominating_set(g: &Graph) -> Option<Vec<usize>> {
+/// Connected dominating set of size at most `k`.
+///
+/// Closed neighborhoods are the set system. Each tuple of the compact
+/// representation is solved as a group Steiner tree in `G` itself, not in the
+/// intersection graph. Among trees of size at most `k`, the smallest is
+/// returned; ties break toward the lexicographically smallest vertex list.
+pub fn connected_dominating_set(g: &Graph, k: usize) -> Option<Vec<usize>> {
     if g.n() == 0 {
         return Some(Vec::new());
     }
-    if !is_connected(g) {
+    if k == 0 {
         return None;
     }
-    if g.n() == 1 {
-        return Some(vec![0]);
+    if g.n() >= 2 && !is_connected(g) {
+        return None;
     }
-    let n = g.n();
-    if n > 22 {
-        return cds_backtrack(g);
+    for v in 0..g.n() {
+        if g.degree(v) + 1 == g.n() {
+            return Some(vec![v]);
+        }
     }
-    let closed = vertex_closed_mask(g);
-    let full = (1u64 << n) - 1;
+    let system = closed_neighborhood_system(g);
+    // Solve does not branch on d. `n` stands in for `semi_ladder_index(g) + 1`.
+    let rep = compact_representation(&system, k, g.n());
     let mut best: Option<Vec<usize>> = None;
-    for mask in 1..(1u64 << n) {
-        let bits = mask.count_ones() as usize;
-        if best.as_ref().map(|b| bits >= b.len()).unwrap_or(false) {
+    for tuple in &rep {
+        if tuple.is_empty() || tuple.iter().any(|fam| fam.is_empty()) {
             continue;
         }
-        let mut cov = 0u64;
-        let mut m = mask;
-        let mut verts = Vec::new();
-        while m != 0 {
-            let b = m.trailing_zeros() as usize;
-            cov |= closed[b];
-            verts.push(b);
-            m &= m - 1;
+        let Some(mut tree) = group_steiner_tree(g, tuple) else {
+            continue;
+        };
+        tree.sort_unstable();
+        tree.dedup();
+        if tree.is_empty() || tree.len() > k || !is_connected_dominating_set(g, &tree) {
+            continue;
         }
-        if cov == full && set_is_connected(g, &verts) {
-            best = Some(verts);
+        let replace = match &best {
+            None => true,
+            Some(prev) => tree.len() < prev.len() || (tree.len() == prev.len() && tree < *prev),
+        };
+        if replace {
+            best = Some(tree);
         }
     }
     best
 }
 
-fn cds_backtrack(g: &Graph) -> Option<Vec<usize>> {
-    let n = g.n();
-    let mut best: Option<Vec<usize>> = None;
-    let mut chosen = Vec::new();
-    fn rec(g: &Graph, start: usize, best: &mut Option<Vec<usize>>, chosen: &mut Vec<usize>) {
-        if best.as_ref().map(|b| chosen.len() >= b.len()).unwrap_or(false) {
-            return;
-        }
-        if !chosen.is_empty()
-            && set_is_connected(g, chosen)
-            && is_dominating_set(g, chosen)
-        {
-            *best = Some(chosen.clone());
-            return;
-        }
-        for v in start..g.n() {
-            chosen.push(v);
-            rec(g, v + 1, best, chosen);
-            chosen.pop();
-        }
-    }
-    rec(g, 0, &mut best, &mut chosen);
-    let _ = n;
-    best
+/// Minimum connected dominating set, via the paper's decision procedure.
+///
+/// `None` when the graph is disconnected and has at least two vertices.
+pub fn minimum_connected_dominating_set(g: &Graph) -> Option<Vec<usize>> {
+    connected_dominating_set(g, g.n())
 }
 
 pub fn is_minimum_dominating_set(g: &Graph, set: &[usize]) -> bool {

@@ -147,7 +147,11 @@ fn brute_connected_set_cover(system: &SetSystem, k: usize) -> Option<Vec<usize>>
         let mut g = Graph::new(m);
         for i in 0..m {
             for j in (i + 1)..m {
-                if system.sets[i].intersection(&system.sets[j]).next().is_some() {
+                if system.sets[i]
+                    .intersection(&system.sets[j])
+                    .next()
+                    .is_some()
+                {
                     g.add_edge(i, j);
                 }
             }
@@ -185,10 +189,7 @@ fn assert_representation_sound(system: &SetSystem, k: usize, d: usize) {
     let minimal = brute_minimal_covers(system, k);
     for cover in &minimal {
         let hit = rep.iter().any(|t| encapsulates_cover(t, cover));
-        assert!(
-            hit,
-            "minimal cover {cover:?} not encapsulated by {rep:?}"
-        );
+        assert!(hit, "minimal cover {cover:?} not encapsulated by {rep:?}");
     }
     for tuple in &rep {
         let mut seen = BTreeSet::new();
@@ -213,7 +214,9 @@ fn assert_representation_sound(system: &SetSystem, k: usize, d: usize) {
 }
 
 fn tuple_product_size(tuple: &Tuple) -> usize {
-    tuple.iter().fold(1usize, |acc, f| acc.saturating_mul(f.len()))
+    tuple
+        .iter()
+        .fold(1usize, |acc, f| acc.saturating_mul(f.len()))
 }
 
 fn tuple_product(tuple: &Tuple) -> Vec<Vec<usize>> {
@@ -263,10 +266,7 @@ fn stars_representation_is_a_single_tuple() {
     let d = set_semi_ladder_index(&system) + 1;
     assert!(is_d_semi_ladder_free(&system, d));
     let rep = compact_representation(&system, 3, d);
-    assert!(
-        rep.len() <= 1,
-        "expected at most one tuple, got {rep:?}"
-    );
+    assert!(rep.len() <= 1, "expected at most one tuple, got {rep:?}");
     assert_eq!(rep.len(), 1);
     for cover in &covers {
         assert!(
@@ -303,10 +303,7 @@ fn spec_stars_covers_are_encapsulated() {
 #[test]
 fn branching_is_forced_on_four_elements() {
     // No single set covers, so the empty seed is not a latent cover and Solve must branch.
-    let system = SetSystem::from_slices(
-        4,
-        &[vec![0, 1], vec![2, 3], vec![0, 2], vec![1, 3]],
-    );
+    let system = SetSystem::from_slices(4, &[vec![0, 1], vec![2, 3], vec![0, 2], vec![1, 3]]);
     assert!(semi_ladder_witness(&system, 1).is_some());
     let d = set_semi_ladder_index(&system) + 1;
     let rep = compact_representation(&system, 2, d);
@@ -316,16 +313,30 @@ fn branching_is_forced_on_four_elements() {
     assert!(minimal.iter().any(|c| c == &vec![2, 3]));
     assert_representation_sound(&system, 2, d);
     // The base all-empty seed does not cover, so some family is a proper subset of F.
-    assert!(rep.iter().any(|t| t.iter().any(|f| f.len() < system.sets.len())));
+    assert!(rep
+        .iter()
+        .any(|t| t.iter().any(|f| f.len() < system.sets.len())));
 }
 
 #[test]
 fn representation_bound_and_random_completeness() {
     let samples = [
         SetSystem::from_slices(3, &[vec![0], vec![1], vec![2], vec![0, 1], vec![1, 2]]),
-        SetSystem::from_slices(4, &[vec![0, 1], vec![1, 2], vec![2, 3], vec![0, 3], vec![0, 1, 2]]),
+        SetSystem::from_slices(
+            4,
+            &[
+                vec![0, 1],
+                vec![1, 2],
+                vec![2, 3],
+                vec![0, 3],
+                vec![0, 1, 2],
+            ],
+        ),
         SetSystem::from_slices(2, &[vec![0], vec![1], vec![0, 1]]),
-        SetSystem::from_slices(5, &[vec![0, 1], vec![1, 2], vec![2, 3], vec![3, 4], vec![4, 0]]),
+        SetSystem::from_slices(
+            5,
+            &[vec![0, 1], vec![1, 2], vec![2, 3], vec![3, 4], vec![4, 0]],
+        ),
     ];
     for system in &samples {
         let d = set_semi_ladder_index(system) + 1;
@@ -382,7 +393,9 @@ fn connected_set_cover_matches_brute_force() {
                             let ig = intersection_graph_of(system);
                             assert!(set_is_connected(&ig, sol));
                         }
-                        (got, expect) => panic!("n={n} k={k} system={system:?} got={got:?} expect={expect:?}"),
+                        (got, expect) => {
+                            panic!("n={n} k={k} system={system:?} got={got:?} expect={expect:?}")
+                        }
                     }
                 }
             });
@@ -432,7 +445,12 @@ fn all_subsets(n: usize) -> Vec<Vec<usize>> {
     out
 }
 
-fn enumerate_families(n: usize, subsets: &[Vec<usize>], choice: &mut [usize], visit: &mut dyn FnMut(&SetSystem)) {
+fn enumerate_families(
+    n: usize,
+    subsets: &[Vec<usize>],
+    choice: &mut [usize],
+    visit: &mut dyn FnMut(&SetSystem),
+) {
     fn rec(
         n: usize,
         subsets: &[Vec<usize>],
@@ -459,7 +477,11 @@ fn intersection_graph_of(system: &SetSystem) -> Graph {
     let mut g = Graph::new(m);
     for i in 0..m {
         for j in (i + 1)..m {
-            if system.sets[i].intersection(&system.sets[j]).next().is_some() {
+            if system.sets[i]
+                .intersection(&system.sets[j])
+                .next()
+                .is_some()
+            {
                 g.add_edge(i, j);
             }
         }
@@ -489,25 +511,99 @@ fn grouping_shrinks_and_preserves_freeness() {
 }
 
 #[test]
-fn lossy_compression_lifts_on_a_small_graph() {
-    let g = Graph::from_edges(4, [(0, 1), (1, 2), (2, 3), (3, 0)]);
-    let d = semi_ladder_index(&g).unwrap() + 1;
-    let k = 2;
-    let inst = lossy_cds_compression_instance(&g, k, d, 1.0);
-    let out_index = semi_ladder_index(&inst.graph).unwrap();
-    assert!(
-        out_index <= d + 1,
-        "output index {out_index} exceeds d+2 freeness threshold (need index ≤ d+1 = {})",
-        d + 1
-    );
-    assert!(is_semi_ladder_free(&inst.graph, d + 2));
-    let cds = minimum_connected_dominating_set(&inst.graph).expect("compressed graph has a CDS");
-    let lifted = lift_connected_dominating_set(&inst, &cds, &g).expect("lift");
-    assert!(
-        is_connected_dominating_set(&g, &lifted),
-        "lifted {lifted:?} is not a CDS of the input"
-    );
-    assert!(lifted.len() <= cds.len());
+fn conn_ds_matches_brute_force() {
+    let path = Graph::from_edges(5, [(0, 1), (1, 2), (2, 3), (3, 4)]);
+    let star = Graph::from_edges(5, [(0, 1), (0, 2), (0, 3), (0, 4)]);
+    let cycle = Graph::from_edges(5, [(0, 1), (1, 2), (2, 3), (3, 4), (4, 0)]);
+    let disconnected = Graph::from_edges(4, [(0, 1), (2, 3)]);
+    let mut complete = Graph::new(4);
+    for i in 0..4 {
+        for j in (i + 1)..4 {
+            complete.add_edge(i, j);
+        }
+    }
+    for g in [&path, &star, &cycle, &disconnected, &complete] {
+        for k in 0..=g.n() {
+            assert_cds_agrees(g, k);
+        }
+    }
+
+    // Every undirected graph on n <= 5, and every budget k in 0..=n.
+    for n in 0..=5 {
+        for g in all_undirected(n) {
+            for k in 0..=n {
+                assert_cds_agrees(&g, k);
+            }
+        }
+    }
+}
+
+fn assert_cds_agrees(g: &Graph, k: usize) {
+    let got = connected_dominating_set(g, k);
+    let expect = brute_connected_dominating_set(g, k);
+    match (&got, &expect) {
+        (None, None) => {}
+        (Some(sol), Some(oracle)) => {
+            assert!(sol.len() <= k, "k={k} size {} on {g:?}", sol.len());
+            assert!(
+                is_connected_dominating_set(g, sol),
+                "k={k} not a CDS: {sol:?} on {g:?}"
+            );
+            assert_eq!(
+                sol.len(),
+                oracle.len(),
+                "k={k} got {sol:?} oracle {oracle:?} on {g:?}"
+            );
+        }
+        (got, expect) => panic!("k={k} got {got:?} oracle {expect:?} on {g:?}"),
+    }
+}
+
+fn brute_connected_dominating_set(g: &Graph, k: usize) -> Option<Vec<usize>> {
+    let n = g.n();
+    if n == 0 {
+        return Some(Vec::new());
+    }
+    if k == 0 || (n >= 2 && !is_connected(g)) {
+        return None;
+    }
+    let mut best: Option<Vec<usize>> = None;
+    for mask in 1usize..(1usize << n) {
+        let size = mask.count_ones() as usize;
+        if size > k {
+            continue;
+        }
+        if best.as_ref().map(|prev| size > prev.len()).unwrap_or(false) {
+            continue;
+        }
+        let set: Vec<usize> = (0..n).filter(|i| mask & (1 << i) != 0).collect();
+        if is_connected_dominating_set(g, &set)
+            && best.as_ref().map_or(true, |prev| {
+                set.len() < prev.len() || (set.len() == prev.len() && set < *prev)
+            })
+        {
+            best = Some(set);
+        }
+    }
+    best
+}
+
+fn all_undirected(n: usize) -> Vec<Graph> {
+    let pairs: Vec<(usize, usize)> = (0..n)
+        .flat_map(|i| ((i + 1)..n).map(move |j| (i, j)))
+        .collect();
+    let m = pairs.len();
+    let mut graphs = Vec::with_capacity(1usize << m);
+    for mask in 0..(1usize << m) {
+        let mut g = Graph::new(n);
+        for (b, &(u, v)) in pairs.iter().enumerate() {
+            if mask & (1usize << b) != 0 {
+                g.add_edge(u, v);
+            }
+        }
+        graphs.push(g);
+    }
+    graphs
 }
 
 #[test]
