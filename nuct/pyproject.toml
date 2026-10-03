@@ -1,0 +1,11 @@
+[project]
+name = "nuct"
+version = "0.1.0"
+description = "Classical cores of the nonuniform Chebyshev transform (arXiv:2609.40277)"
+requires-python = ">=3.11"
+dependencies = ["jax"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
