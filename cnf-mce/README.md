@@ -1,4 +1,4 @@
-Counting and Filtering vocabulary construction and Min-Cost Encoding.
+Counting and Filtering vocabulary construction and Min-Cost Encoding (arXiv:2610.01127).
 
 ```
 cargo test
