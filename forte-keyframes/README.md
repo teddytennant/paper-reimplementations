@@ -1,4 +1,4 @@
-Training-free keyframe selector: GP relevance scoring plus exact logarithmic-coverage optimization.
+Training-free keyframe selector in JAX: GP relevance scoring plus exact logarithmic-coverage optimization (arXiv:2610.00573).
 
 ```
 python3 -m pytest
