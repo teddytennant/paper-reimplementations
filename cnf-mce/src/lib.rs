@@ -1,13 +1,13 @@
 //! Counting and Filtering vocabulary construction and Min-Cost Encoding.
 //!
 //! Counting is sequential. Summing document counts matches the paper's
-//! parallel workers. Token preference is `eta * id / |V|`, which is not the
-//! paper's schedule. `eta = 0` uses length plus boundary penalty only.
+//! parallel workers. Preference cost is section 4.1's formula, scaled by
+//! eta (1 is the paper, 0 drops it).
 
 mod units;
 mod vocab;
 
-pub use vocab::Vocab;
+pub use vocab::{preference_cost, Vocab};
 
 /// Parameters for Counting and Filtering.
 ///
@@ -24,7 +24,8 @@ pub struct CnfConfig {
     pub vocab_size: usize,
     /// Boundary penalty coefficient. The paper uses 0.05.
     pub lambda: f64,
-    /// Token-preference scale. Default behavior is 0.0.
+    /// Scale on section 4.1's preference cost. `1.0` is the paper. `0.0` drops it.
+    /// Callers pass this explicitly.
     pub eta: f64,
 }
 
@@ -33,7 +34,8 @@ pub fn build_vocabulary(corpus: &[&str], cfg: &CnfConfig) -> Vocab {
     vocab::build_vocabulary(corpus, cfg)
 }
 
-/// Min-Cost Encoding of UTF-8 text. `eta = 0` ignores token ids.
+/// Min-Cost Encoding of UTF-8 text.
+/// `eta = 1` is section 4.1. `eta = 0` ignores token ids.
 pub fn encode(text: &str, vocab: &Vocab, lambda: f64, eta: f64) -> Vec<u32> {
     vocab::encode(text, vocab, lambda, eta)
 }

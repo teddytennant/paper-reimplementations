@@ -237,6 +237,15 @@ fn interval_contains(intervals: &[(usize, usize)], len: usize) -> bool {
     intervals.iter().any(|&(lo, hi)| len >= lo && len <= hi)
 }
 
+/// Section 4.1 token preference, scaled by `eta`.
+///
+/// `s = 10000 / (1 + 0.01 * id)`, `eps = eta * 0.1 / (10 + s)`.
+/// `eta = 1` is the paper. `eta = 0` drops the term.
+pub fn preference_cost(id: u32, eta: f64) -> f64 {
+    let s = 10000.0 / (1.0 + 0.01 * (id as f64));
+    eta * 0.1 / (10.0 + s)
+}
+
 pub fn encode(text: &str, vocab: &Vocab, lambda: f64, eta: f64) -> Vec<u32> {
     encode_bytes(text.as_bytes(), vocab, lambda, eta)
 }
@@ -247,7 +256,6 @@ pub fn encode_bytes(bytes: &[u8], vocab: &Vocab, lambda: f64, eta: f64) -> Vec<u
         return Vec::new();
     }
     let units = UnitIndex::from_bytes(bytes);
-    let vocab_len = vocab.len().max(1) as f64;
     let mut dp = vec![0.0; n + 1];
     let mut next = vec![0usize; n];
     for i in (0..n).rev() {
@@ -263,7 +271,7 @@ pub fn encode_bytes(bytes: &[u8], vocab: &Vocab, lambda: f64, eta: f64) -> Vec<u
             let Some(penalty) = units.penalty(i, j, lambda) else {
                 continue;
             };
-            let eps = eta * (id as f64) / vocab_len;
+            let eps = preference_cost(id, eta);
             let total = 1.0 + penalty + eps + dp[j];
             if total < best_cost {
                 best_cost = total;

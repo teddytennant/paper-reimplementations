@@ -1,6 +1,6 @@
 use cnf_mce::{
     boundary_penalty, build_vocabulary, decode, decode_bytes, encode, encode_bytes, is_valid_span,
-    CnfConfig, Vocab,
+    preference_cost, CnfConfig, Vocab,
 };
 
 fn cfg(intervals: Vec<(usize, usize)>, thresholds: Vec<u64>, raw: usize, k: usize) -> CnfConfig {
@@ -174,6 +174,59 @@ fn eta_prefers_smaller_id_on_tie() {
     assert_eq!(with, vec![b"a".to_vec(), b"bc".to_vec()]);
 }
 
+/// Section 4.1: s = 10000 / (1 + 0.01 * id), eps = eta * 0.1 / (10 + s).
+fn section_4_1_eps(id: u32, eta: f64) -> f64 {
+    let s = 10000.0 / (1.0 + 0.01 * (id as f64));
+    eta * 0.1 / (10.0 + s)
+}
+
+#[test]
+fn preference_cost_matches_section_4_1_for_id_0_and_1000() {
+    let eta = 1.0;
+    let eps0 = preference_cost(0, eta);
+    let eps1000 = preference_cost(1000, eta);
+    assert_eq!(eps0, section_4_1_eps(0, eta));
+    assert_eq!(eps1000, section_4_1_eps(1000, eta));
+    // Numeric values, not only "smaller id is cheaper".
+    assert!((eps0 - 0.1 / 10010.0).abs() < 1e-15);
+    assert!((eps1000 - 1.0880316518298714e-4).abs() < 1e-18);
+    assert!(eps0 < eps1000);
+    assert_eq!(preference_cost(0, 0.0), 0.0);
+    assert_eq!(preference_cost(1000, 0.0), 0.0);
+
+    // Encode must use those costs. id 0 is a lambda span; id 1000 is not.
+    // The switch sits at the formula gap, which the old id/|V| stand-in misses.
+    let mut tokens = vec![b"-ab".to_vec()];
+    for i in 1..1000 {
+        tokens.push(vec![0x80, (i & 0xff) as u8, (i >> 8) as u8]);
+    }
+    tokens.push(b"abcd".to_vec());
+    tokens.push(b"cd".to_vec());
+    let vocab = Vocab::from_tokens(tokens);
+    assert_eq!(vocab.get_id(b"-ab"), Some(0));
+    assert_eq!(vocab.get_id(b"abcd"), Some(1000));
+    assert_eq!(vocab.get_id(b"cd"), Some(1001));
+    let dash = vocab.get_id(b"-").unwrap();
+    let text = "-abcd";
+    assert_eq!(boundary_penalty(text, 0, 3, 1.0), Some(1.0));
+    assert_eq!(boundary_penalty(text, 0, 1, 1.0), Some(0.0));
+    assert_eq!(boundary_penalty(text, 1, 5, 1.0), Some(0.0));
+    assert_eq!(boundary_penalty(text, 3, 5, 1.0), Some(0.0));
+
+    let gap = (section_4_1_eps(dash, eta) + eps1000) - (eps0 + section_4_1_eps(1001, eta));
+    assert!(gap > 0.0);
+    assert_eq!(
+        encode(text, &vocab, gap * 0.5, eta),
+        vec![0, 1001],
+        "below the formula gap, id 0 still wins"
+    );
+    assert_eq!(
+        encode(text, &vocab, gap * 1.5, eta),
+        vec![dash, 1000],
+        "above the formula gap, id 1000 wins"
+    );
+}
+
 #[test]
 fn combining_marks_join_letters_and_cjk_are_singletons() {
     let text = "e\u{0301} x";
@@ -220,7 +273,6 @@ fn small_vocab_size_still_keeps_all_bytes() {
 fn brute(text: &str, vocab: &Vocab, lambda: f64, eta: f64) -> Vec<Vec<u8>> {
     let n = text.len();
     let bytes = text.as_bytes();
-    let vocab_len = vocab.len() as f64;
     let mut best_cost = f64::INFINITY;
     let mut best_cuts: Vec<usize> = Vec::new();
     let mut cuts = vec![0usize];
@@ -230,7 +282,6 @@ fn brute(text: &str, vocab: &Vocab, lambda: f64, eta: f64) -> Vec<Vec<u8>> {
         vocab: &Vocab,
         lambda: f64,
         eta: f64,
-        vocab_len: f64,
         i: usize,
         n: usize,
         cost: f64,
@@ -253,7 +304,7 @@ fn brute(text: &str, vocab: &Vocab, lambda: f64, eta: f64) -> Vec<Vec<u8>> {
             let Some(p) = boundary_penalty(text, i, j, lambda) else {
                 continue;
             };
-            let c = 1.0 + p + eta * (id as f64) / vocab_len;
+            let c = 1.0 + p + preference_cost(id, eta);
             cuts.push(j);
             rec(
                 text,
@@ -261,7 +312,6 @@ fn brute(text: &str, vocab: &Vocab, lambda: f64, eta: f64) -> Vec<Vec<u8>> {
                 vocab,
                 lambda,
                 eta,
-                vocab_len,
                 j,
                 n,
                 cost + c,
@@ -278,7 +328,6 @@ fn brute(text: &str, vocab: &Vocab, lambda: f64, eta: f64) -> Vec<Vec<u8>> {
         vocab,
         lambda,
         eta,
-        vocab_len,
         0,
         n,
         0.0,
