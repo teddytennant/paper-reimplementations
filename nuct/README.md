@@ -1,7 +1,6 @@
 # nuct
 
-Classical cores of the nonuniform Chebyshev transform, arXiv:2609.40277
-(Gupta, *A Nonuniform Chebyshev Transform for Quantum Linear Algebra*).
+Classical identities behind Conditioning-Free Non-Uniform Quantum Fourier and Chebyshev Transforms (arXiv:2609.40277).
 
 The package is importable as `nuct`. It is a small JAX library (float64 /
 complex128). Quantum circuits are not implemented.

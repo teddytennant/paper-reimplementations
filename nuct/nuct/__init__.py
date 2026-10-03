@@ -7,7 +7,7 @@ is here is the classical skeleton those circuits are built on:
   normalized matrix ``C_N``.
 * Theorem 5.1: ``C_N = (F_t + F_{t^-}) / 2``.
 * Eq. (6): integer split of a fixed-point node, and the phase identity.
-* Bessel–Chebyshev truncation of ``H(x, z) = exp(-i π x z / 2)``.
+* Bessel-Chebyshev truncation of ``H(x, z) = exp(-i π x z / 2)``.
 * Eq. (31): ``F_τ^{(K)} = sum_r diag(v_r) F M_σ diag(u_r)``.
 * Angle-output rounding with no ``κ``, and the node-error operator bound.
 * The classical row oracle for ``M_σ``.

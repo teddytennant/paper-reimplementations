@@ -1,4 +1,4 @@
-"""Bessel–Chebyshev factorization of the interaction kernel, and Eq. (31).
+"""Bessel-Chebyshev factorization of the interaction kernel, and Eq. (31).
 
 The kernel is ``H(x, z) = exp(-i π x z / 2)`` on ``[-1, 1]^2``. Its
 Chebyshev coefficients are
