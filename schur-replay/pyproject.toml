@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "schur-replay"
+version = "0.1.0"
+description = "Schur Replay NVFP4 scale selection"
+requires-python = ">=3.10"
+dependencies = [
+    "jax",
+    "numpy",
+    "pytest",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
