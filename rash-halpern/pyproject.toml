@@ -1,0 +1,24 @@
+[project]
+name = "rash-halpern"
+version = "0.1.0"
+description = "Approximately shifted robust Halpern iteration for finite robust average-reward MDPs"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "jax",
+    "numpy",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
