@@ -1,0 +1,16 @@
+[project]
+name = "sgma"
+version = "0.1.0"
+description = "Structure-guided quadtree tokenizer and damped accumulation for masked autoencoding"
+requires-python = ">=3.10"
+dependencies = [
+    "jax",
+    "numpy",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
