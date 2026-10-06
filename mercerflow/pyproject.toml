@@ -1,0 +1,26 @@
+[project]
+name = "mercerflow"
+version = "0.1.0"
+description = "Flow matching in the Mercer eigenbasis of a Gaussian process prior"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "jax",
+    "numpy",
+    "optax",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mercerflow*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
