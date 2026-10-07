@@ -1,0 +1,10 @@
+[project]
+name = "sfhw"
+version = "0.1.0"
+description = "Signed fractional hypertree width enumerator for conjunctive queries with negation"
+requires-python = ">=3.10"
+readme = "README.md"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
