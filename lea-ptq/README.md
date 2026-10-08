@@ -2,7 +2,7 @@
 
 Local error score and greedy mixed-precision allocator from arXiv 2610.09877.
 
-Authors: Houache, Traonmilin, Aujol.
+Authors: Samy Houache, Yann Traonmilin, Jean-François Aujol.
 
 Install with `pip install -e .`.
 
