@@ -1,6 +1,6 @@
 # Activation-aware weight tensorization
 
-Training-free diagonal calibration before a tensor-train (TT) decomposition of a linear map, from arXiv 2610.10085 (Alessandro Beatini, Marco Maronese, Emanuele Rodola).
+Training-free diagonal calibration before a tensor-train (TT) decomposition of a linear map, from arXiv 2610.10085 (Alessandro Beatini, Marco Maronese, Emanuele Rodolà).
 
 A calibration matrix C with shape (T, n) gives one importance score per input channel. Those scores become positive column scales s. The weight W with shape (m, n) is preconditioned as W' = W diag(s), then factored by TT-SVD. Deployment applies the inverse scales to the input: y = W_hat'(D^{-1} x), computed as a TT matvec of the cores against x / s. Only synthetic linear layers are included.
 
