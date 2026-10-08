@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "awt"
+version = "0.1.0"
+description = "Activation-aware weight tensorization (arXiv 2610.10085)"
+requires-python = ">=3.11"
+dependencies = [
+  "jax>=0.4",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
