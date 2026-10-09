@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "path-thinker"
+version = "0.1.0"
+description = "Recursive Thinker inside a denoising step, coupled to a frozen Painter by ControlNet (arXiv 2610.09876)"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = ["jax", "numpy"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
