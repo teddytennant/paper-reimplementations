@@ -1,0 +1,8 @@
+[package]
+name = "knowledge-space"
+version = "0.1.0"
+edition = "2021"
+description = "Appendix A finite weak solver (arXiv:2610.12306)"
+license = "MIT"
+
+[dependencies]
