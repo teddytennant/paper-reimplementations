@@ -1,0 +1,3 @@
+RGBD mesh refinement from one depth map: match visible vertices to back-projected depth, transfer corrections across a symmetry plane, and propagate them with a cotangent Laplacian. Paper: https://arxiv.org/abs/2610.11187
+
+Run `python -m pytest -q` from this directory. Software z-buffer instead of nvdiffrast, Hungarian matching instead of the GPU auction solver, synthetic meshes instead of GSO. The default symmetry grid is 15 degree azimuth steps and elevations 0, 15, 30 (tilt from vertical) on a 64x64 map, not the paper's 1260 candidates at 512x512. Intrinsics and pixels share one space; the tests use pixel coordinates.
