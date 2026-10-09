@@ -257,7 +257,8 @@ def symmetry_displacements(
     applied = []
     if left.size == 0 or right.size == 0:
         return disp, np.asarray(applied, dtype=np.int32)
-    cost = np.linalg.norm(phi[left, None, :] - phi[right, None, :], axis=2)
+    # left is (n, 1, 3), right is (1, m, 3). The two sides need not match in size.
+    cost = np.linalg.norm(phi[left, None, :] - phi[None, right, :], axis=2)
     rows, cols = linear_sum_assignment(cost)
     corrected = verts + _as_array(depth_disp)
     for row, col in zip(rows, cols):

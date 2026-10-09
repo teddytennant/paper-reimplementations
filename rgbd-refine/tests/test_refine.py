@@ -202,6 +202,50 @@ def test_symmetry_detector_and_transfer():
     assert np.allclose(disp2[protected], 0.0)
 
 
+def test_symmetry_match_allows_unequal_sides():
+    # The reviewer's call: 2 positive matched vertices, 3 negative targets.
+    verts = np.array(
+        [
+            [1.0, 0.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [-1.05, 0.0, 0.0],
+            [-1.05, 1.0, 0.0],
+            [-1.05, 2.0, 0.0],
+        ],
+        dtype=np.float64,
+    )
+    disp, applied = symmetry_displacements(
+        verts,
+        np.zeros_like(verts),
+        matched=[0, 1],
+        normal=np.array([1.0, 0.0, 0.0]),
+        offset=0.0,
+    )
+    assert set(int(i) for i in applied) == {2, 3}
+    assert np.allclose(verts[applied] + disp[applied], [[-1.0, 0.0, 0.0], [-1.0, 1.0, 0.0]])
+    assert np.allclose(disp[4], 0.0)
+
+    # The other rectangle, 3 positive and 2 negative, must broadcast too.
+    wide = np.array(
+        [
+            [1.0, 0.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [1.0, 2.0, 0.0],
+            [-1.05, 0.0, 0.0],
+            [-1.05, 1.0, 0.0],
+        ],
+        dtype=np.float64,
+    )
+    disp2, applied2 = symmetry_displacements(
+        wide,
+        np.zeros_like(wide),
+        matched=[0, 1, 2],
+        normal=np.array([1.0, 0.0, 0.0]),
+        offset=0.0,
+    )
+    assert set(int(i) for i in applied2) == {3, 4}
+
+
 def test_full_pipeline_reduces_error():
     k = (160.0, 160.0, 64.0, 64.0)
     true, faces = _sheared_sphere()
