@@ -7,7 +7,7 @@ Matrix Approximation Sparse Attention scores: pair, block, vertical, and slash, 
 From this directory:
 
 ```
-/home/nixos/arxiv-impl-work/bin/py -m pip install -e .
+pip install -e .
 ```
 
 `pyproject.toml` sets `pythonpath = ["src"]` for pytest, so an editable install is optional.
@@ -15,7 +15,7 @@ From this directory:
 ## Tests
 
 ```
-JAX_PLATFORMS=cpu /home/nixos/arxiv-impl-work/bin/py -m pytest tests -q
+JAX_PLATFORMS=cpu python -m pytest tests -q
 ```
 
 ## Not the paper
