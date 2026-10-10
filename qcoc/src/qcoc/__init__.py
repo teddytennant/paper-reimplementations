@@ -1,4 +1,4 @@
-"""Per-head Query-Conditioned Operator Compression."""
+"""Per-head Query-Calibrated Operator Compression."""
 
 from qcoc.compress import attend, compress
 
