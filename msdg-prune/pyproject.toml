@@ -1,0 +1,17 @@
+[project]
+name = "msdg-prune"
+version = "0.1.0"
+description = "MSDG-Prune visual token selection"
+requires-python = ">=3.10"
+dependencies = ["jax"]
+readme = "README.md"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

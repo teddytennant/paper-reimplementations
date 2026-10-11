@@ -1,0 +1,1 @@
+MSDG-Prune visual token selection (https://arxiv.org/abs/2609.36916). Install with `pip install -e .` and run `python -m pytest`. No MLLM and no images are run. The Qwen spatial merger and the Mini-Gemini dual encoder are not run. Assignment ties use the lower centroid index.
