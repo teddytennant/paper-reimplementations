@@ -170,9 +170,9 @@ def _update_centroids(directions, centroids, labels, margins):
 def spherical_kmeans(directions, n_groups, seed=DEFAULT_SEED, max_iterations=MAX_KMEANS_ITERS):
     """Spherical k-means from Algorithm 1, at most 10 iterations.
 
-    Stop when t > 1 and (labels are unchanged or the relative loss change is
-    below 1e-5), or after max_iterations. Centroids are updated only when the
-    loop does not break. Tokens are reassigned to the final centroids.
+    Stop when t > 1 and (labels are unchanged or the absolute relative loss
+    change is below 1e-5), or after max_iterations. Centroids are updated only
+    when the loop does not break. Tokens are reassigned to the final centroids.
     Returns (labels, centroids).
     """
     directions = jnp.asarray(directions, dtype=jnp.float64)
@@ -184,7 +184,7 @@ def spherical_kmeans(directions, n_groups, seed=DEFAULT_SEED, max_iterations=MAX
         labels, margins, loss = _assign(directions, centroids)
         if t > 1:
             unchanged = bool(jnp.array_equal(labels, prev_labels))
-            rel = (loss_prev - loss) / max(loss_prev, UNIT_EPS)
+            rel = abs(loss_prev - loss) / max(loss_prev, UNIT_EPS)
             if unchanged or rel < LOSS_TOL:
                 break
         centroids = _update_centroids(directions, centroids, labels, margins)
