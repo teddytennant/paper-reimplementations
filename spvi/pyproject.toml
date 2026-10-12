@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spvi"
+version = "0.1.0"
+description = "Scan-parallel variational inference for latent jump models"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["jax", "optax"]
+
+[project.optional-dependencies]
+tests = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
