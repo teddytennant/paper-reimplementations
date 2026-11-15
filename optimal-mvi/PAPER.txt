@@ -1,0 +1,20 @@
+Optimal High-Order Methods for Solving Monotone Variational Inequalities
+Xinliang Zhang, Lesi Chen, Linxuan Pan, Chengchang Liu, Junchi Yang, Jingzhao Zhang
+arXiv:2609.23557v1 [math.OC] 20 Sep 2026
+
+Abstract
+We study second- and higher-order methods for solving smooth monotone variational
+inequalities (MVI). Monteiro and Svaiter (SIAM J. Optim., 2012) showed that a
+second-order method, NPE, converges at a rate of O(T^{-1.5}). For convex-concave
+minimax optimization, a subclass of MVI problems, Chen, Liu, Luo, and Zhang
+(COLT 2025) recently improved this rate to O~(T^{-1.75}). However, the result has
+a substantial gap compared to the lower bound of Omega(T^{-2.5}) established by
+Chen et al. (2026). In this paper, we propose a novel second-order method that
+achieves the optimal rate of O(T^{-2.5}). Our algorithm also extends to
+higher-order methods: for any integer p >= 1, we obtain a pth-order method with
+a convergence rate of O(T^{-(3p-1)/2}), matching the known lower bounds and
+therefore establishing optimal rates across all orders.
+
+This package implements the unconstrained p=2 case of Algorithm 1 (inexact
+accelerated Halpern iteration) with the p=2 tensor step (Definition 2.2), the
+anchored tensor method (Algorithm 2), and R-Adaptive-ATM (Algorithm 3).
