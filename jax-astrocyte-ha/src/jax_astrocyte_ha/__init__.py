@@ -1,0 +1,67 @@
+"""Neural-astrocyte hybrid automaton (arXiv:2609.16217)."""
+
+from jax_astrocyte_ha.dynamics import (
+    ARNNParams,
+    NRNNParams,
+    actor_logits,
+    arnn_step,
+    arnn_update,
+    context_from_h,
+    decode,
+    init_arnn,
+    init_nrnn,
+    nrnn_step,
+    observation,
+    unroll_nrnn,
+    value,
+)
+from jax_astrocyte_ha.env import (
+    Config,
+    build_trial,
+    make_nrnn_batch,
+    reach_mse,
+    reach_reward,
+    sample_context_sequence,
+    target_xy,
+    tile_contexts,
+)
+from jax_astrocyte_ha.train import (
+    a2c_loss,
+    a2c_train_step,
+    gae,
+    hybrid_rollout,
+    nrnn_mse_loss,
+    nrnn_train_step,
+)
+from jax_astrocyte_ha.weff import effective_weights
+
+__all__ = [
+    "ARNNParams",
+    "Config",
+    "NRNNParams",
+    "a2c_loss",
+    "a2c_train_step",
+    "actor_logits",
+    "arnn_step",
+    "arnn_update",
+    "build_trial",
+    "context_from_h",
+    "decode",
+    "effective_weights",
+    "gae",
+    "hybrid_rollout",
+    "init_arnn",
+    "init_nrnn",
+    "make_nrnn_batch",
+    "nrnn_mse_loss",
+    "nrnn_step",
+    "nrnn_train_step",
+    "observation",
+    "reach_mse",
+    "reach_reward",
+    "sample_context_sequence",
+    "target_xy",
+    "tile_contexts",
+    "unroll_nrnn",
+    "value",
+]
