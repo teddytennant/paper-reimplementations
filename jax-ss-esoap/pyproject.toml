@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "jax-ss-esoap"
+version = "0.1.0"
+description = "JAX implementation of SS-ESOAP, self-scaled adaptive Kronecker preconditioning (arXiv:2608.29448)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Teddy Tennant", email = "teddytennant@icloud.com" }]
+dependencies = ["jax>=0.4.30", "jaxlib>=0.4.30", "optax>=0.2.2", "numpy>=1.26"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["ss_esoap"]
