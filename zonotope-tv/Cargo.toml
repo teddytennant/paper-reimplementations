@@ -1,0 +1,12 @@
+[package]
+name = "zonotope_tv"
+version = "0.1.0"
+edition = "2021"
+description = "Deterministic relative approximation of TV distance between mixtures of product distributions"
+license = "MIT"
+
+[[bin]]
+name = "zonotope_tv"
+path = "src/main.rs"
+
+[dependencies]
