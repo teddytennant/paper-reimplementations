@@ -1,0 +1,23 @@
+[project]
+name = "mefpia"
+version = "0.1.0"
+description = "JAX kernel of MEFPIA for EGW quantum games (arXiv:2609.21944)"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Teddy Tennant", email = "teddytennant@icloud.com" }]
+requires-python = ">=3.10"
+dependencies = ["jax", "jaxlib", "numpy"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
