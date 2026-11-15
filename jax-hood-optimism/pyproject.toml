@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "jax-hood-optimism"
+version = "0.1.0"
+description = "JAX implementation of higher-order optimism with discounting (HOOD), arXiv:2609.04113"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "Teddy Tennant", email = "teddytennant@icloud.com" }]
+dependencies = ["jax>=0.4.30", "numpy>=1.26"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["hood"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
