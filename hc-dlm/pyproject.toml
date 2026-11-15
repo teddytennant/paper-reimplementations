@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hc-dlm"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "jax",
+    "optax",
+    "numpy",
+]
+
+[tool.setuptools]
+py-modules = ["hc_dlm"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
