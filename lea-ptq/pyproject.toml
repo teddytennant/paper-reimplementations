@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lea-ptq"
+version = "0.1.0"
+description = "Local error score and greedy mixed-precision allocator from arXiv 2610.09877"
+requires-python = ">=3.11"
+dependencies = ["jax>=0.4"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
