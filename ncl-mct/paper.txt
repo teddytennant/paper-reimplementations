@@ -1,0 +1,2400 @@
+                                         Preprint
+
+
+
+
+                                         N EURAL C ONSTITUTIVE L EARNING FOR G ENERAL -
+                                         IZED R EACTION -D IFFUSION S YSTEMS
+
+                                          Shang-Ke Chen, Yu-Peng Wang, Shih-Hsuan Hung & Min-Jhe Lu
+                                          National Tsing Hua University
+
+                                          Wei-Fang Sun, Chao-Shun Zhan & Simon See
+                                          NVIDIA
+arXiv:2609.37113v1 [cs.LG] 29 Sep 2026
+
+
+
+
+                                                                                      A BSTRACT
+
+                                                    Generalized reaction-diffusion systems encompass diverse transport mechanisms
+                                                    and coupled reaction kinetics. A central question for neural PDE solvers is what
+                                                    should be learned so that a common interface can accommodate phase-field and
+                                                    degenerate transport, local reactions, and multispecies coupling. We propose
+                                                    the Neural Constitutive Laws–Mass-Compression-Transport (NCL-MCT) Solver,
+                                                    which learns PDE-specific constitutive responses while retaining temporal evolu-
+                                                    tion in a shared MCT integrator. Transport is represented through mobility and
+                                                    thermodynamic driving force, and reaction through relative reaction rates. These
+                                                    constitutive responses depend on the current density rather than explicitly on the
+                                                    initial condition or elapsed time, motivating their reuse across different initial
+                                                    conditions and time horizons. The same interface supports velocity-data supervi-
+                                                    sion and known-law supervision, neither of which requires time integration during
+                                                    training. When constitutive laws are known, supervision can be evaluated on in-
+                                                    dependently sampled density fields, enabling trajectory-free constitutive learning
+                                                    without generating solution trajectories. Across seven systems, separately trained
+                                                    constitutive modules share the same interface and MCT integrator and achieve rel-
+                                                    ative rollout L2 errors of 10−4 to 10−2 . Tests with unseen initial-condition fami-
+                                                    lies and an extended time horizon assess reuse beyond training conditions, while
+                                                    separate experiments demonstrate trajectory-free constitutive learning. These re-
+                                                    sults support constitutive responses as an effective learning target for a shared
+                                                    neural PDE framework.
+
+
+
+                                         1   I NTRODUCTION
+
+                                         Generalized reaction-diffusion partial differential equations (PDEs) describe the evolution of spatial
+                                         densities through transport, diffusion, and local production or depletion. They underpin models
+                                         of biological pattern formation, tumor growth, and intracellular condensation (Turing, 1952; Lu
+                                         et al., 2022; Groves et al., 2026). Their dynamics span linear, nonlinear, degenerate, and higher-
+                                         order diffusion, together with local and coupled reactions (Cahn & Hilliard, 1958; Vázquez, 2006).
+                                         These processes may also couple with pressure, fluid flow, or mechanical deformation (Lu et al.,
+                                         2019; 2022). Despite this diversity, density balance provides a common evolution structure, while
+                                         constitutive laws determine the system-specific transport and reaction responses.
+                                         Most neural PDE methods learn the solution or its evolution: physics-informed neural networks
+                                         (PINNs) represent solution fields directly (Raissi et al., 2019), neural operators learn solution
+                                         maps (Li et al., 2021; Lu et al., 2021), and other approaches learn temporal derivatives for numerical
+                                         integration (Hou et al., 2026). Constitutive laws instead close governing equations by specifying the
+                                         physical responses that distinguish one system from another. In solid mechanics, neural constitutive
+                                         laws have shown that such responses can be learned while retaining the governing evolution (Ma
+                                         et al., 2023). This suggests a complementary learning target for generalized reaction-diffusion sys-
+                                         tems: learning PDE-specific constitutive responses while retaining the shared evolution structure.
+                                         The remaining challenge is to define a common constitutive interface that accommodates phase-
+
+
+                                                                                            1
+Preprint
+
+
+
+
+field and degenerate transport, local reactions, and multispecies coupling, while supporting both
+velocity-data supervision and known-law supervision.
+We address this problem with the Neural Constitutive Laws–Mass-Compression-Transport (NCL-
+MCT) Solver, which separates PDE-specific constitutive responses from shared temporal kinemat-
+ics. Guided by the energetic variational approach (EnVarA) (Hyon et al., 2010), the constitutive in-
+terface represents transport through mobility and thermodynamic driving force, and reaction through
+relative reaction rates. The constitutive modules learn these responses, while the shared MCT inte-
+grator evolves the density through the decomposition ρ = M I, separating material mass from com-
+pression associated with local volume change. Each PDE trains its own constitutive modules while
+sharing the same interface and MCT integrator, under either velocity-data supervision or known-law
+supervision. When known constitutive laws are evaluated on independently sampled density fields,
+the same framework further enables trajectory-free constitutive learning without generating solution
+trajectories. For the autonomous systems considered here, the constitutive responses depend on the
+current density rather than explicitly on the initial condition or elapsed time, motivating their reuse
+across different initial conditions and time horizons.
+We evaluate NCL-MCT Solver on seven systems spanning phase-field and degenerate transport,
+local reactions, and coupled species. Across these systems, the shared interface achieves relative
+rollout L2 errors of 10−4 to 10−2 and is competitive with or better than the evaluated baselines
+on most systems. Without retraining, the learned constitutive modules achieve roughly 6× lower
+error on unseen initial-condition families than the strongest finite baseline. Over an extended time
+horizon of 1.67× the training horizon, their errors increase by at most 1.5×, compared with up to
+5× for the evaluated baselines, while remaining an order of magnitude lower in absolute error. Our
+contributions are threefold:
+
+• We formulate constitutive learning for generalized reaction-diffusion systems, representing trans-
+  port through mobility and thermodynamic driving force and reaction through relative reaction
+  rates, with velocity-data or known-law supervision, including trajectory-free constitutive learning
+  from independently sampled density fields.
+• We develop NCL-MCT Solver, which couples PDE-specific constitutive modules to a shared MCT
+  integrator through a common constitutive interface.
+• We demonstrate cross-system applicability across seven systems and evaluate reuse of the learned
+  constitutive modules, without retraining, on unseen initial-condition families and an extended time
+  horizon.
+
+
+2     R ELATED W ORK
+
+2.1   S OLUTION L EARNING WITH P HYSICAL C ONSTRAINTS
+
+Physics-informed neural networks (PINNs) represent PDE solutions directly and impose governing
+equations through residual losses (Raissi et al., 2019; Karniadakis et al., 2021), while neural opera-
+tors such as FNO (Li et al., 2021), DeepONet (Lu et al., 2021), and CNO (Raonić et al., 2023) learn
+mappings between input functions and solution fields. Physical structure can further enter through
+PDE residuals, conservation, hard constraints, architectural constraints, or energy-based regulariza-
+tion (Li et al., 2024; Hansen et al., 2023; Hao et al., 2026; Liu et al., 2024a; Tanaka et al., 2025).
+These approaches constrain the solution representation or prediction, whereas constitutive learning
+places the trainable model in the physical response laws used by an explicit evolution procedure.
+
+2.2   T IME -D ERIVATIVE L EARNING WITH N UMERICAL I NTEGRATION
+
+TI-DeepONet (Nayak & Goswami, 2026) and PITI-DeepONet (Mandl et al., 2026) learn temporal
+derivative operators and advance solutions through numerical integration, while CFO (Hou et al.,
+2026) learns the complete PDE right-hand side through flow matching. These approaches retain
+explicit time integration but learn the state evolution at the derivative level. In contrast, constitutive
+learning separates transport and reaction into PDE-specific physical responses that are supplied to a
+shared numerical integrator.
+
+
+                                                    2
+Preprint
+
+
+
+
+2.3   C OMPONENT L EARNING WITHIN N UMERICAL S OLVERS
+
+Learned numerical solvers may replace selected discretizations or physical components while retain-
+ing established PDE update procedures (Bar-Sinai et al., 2019; Kochkov et al., 2021). FINN (Karl-
+bauer et al., 2022), PeRCNN (Rao et al., 2023), PAPM (Liu et al., 2024b), and FluxGNN (Horie &
+Mitsume, 2024) learn fluxes, sources, nonlinear terms, or conservative exchanges within structured
+numerical formulations. These approaches preserve physical organization through component defi-
+nitions and numerical assembly. In contrast, NCL-MCT Solver focuses specifically on PDE-specific
+constitutive responses and couples them to a shared MCT integrator through a common constitutive
+interface.
+
+2.4   C ONSTITUTIVE AND VARIATIONAL L EARNING
+
+Constitutive laws close governing equations by specifying system-specific physical responses, with
+classical examples in elasticity and plasticity (Treloar, 1943; Arruda & Boyce, 1993; Drucker &
+Prager, 1952). Variational formulations further organize these responses through energy, dissipation,
+and kinematics. EnVarA (Hyon et al., 2010) provides such a structure by relating energetic and dissi-
+pative forces. EVNN (Hu et al., 2024) and energy-dissipation approaches (Lu et al., 2026a;b) embed
+related principles into learning and numerical evolution, while VONNs (Huang et al., 2022) directly
+learns free-energy and dissipation potentials from macroscopic observations. Stat-PINNs (Huang
+et al., 2025) further learns free energy and dissipative operators from short-time particle data, ad-
+dressing non-uniqueness in thermodynamic identification. Recent differentiable phase-field models
+infer free energies and kinetic laws through PDE evolution (Cohen et al., 2026). In mechanics,
+NCLaw (Ma et al., 2023), UniPhy (Mittal et al., 2025), and PC-NCLaws (Xie et al., 2025) learn
+material constitutive responses within numerical simulators. DOOL (Chang et al., 2026) learns dis-
+sipative fluxes or change rates by minimizing an Onsager Rayleighian without solution labels and
+advances them through explicit conservation or change laws. Together, these methods establish
+physical closures as a learning target, but differ in the learned quantities and evolution mechanisms.
+For generalized reaction-diffusion systems, NCL-MCT Solver uses a common constitutive inter-
+face: mobility and thermodynamic driving force for transport, and relative reaction rates for reac-
+tion. These PDE-specific responses are coupled to a shared MCT integrator and can be supervised
+directly without differentiating through time integration.
+
+3     P RELIMINARIES
+
+Following the energetic variational approach (EnVarA) (Hyon et al., 2010; Wang et al., 2020), we
+organize generalized reaction-diffusion systems into transport and reaction constitutive laws cou-
+pled to shared temporal kinematics. For a smooth, positive density ρ on Ω ⊂ Rd with problem-
+specific boundary conditions, the density balance is
+                                         ∂t ρ + ∇ · (ρu) = ρr.                                        (1)
+
+Constitutive laws from energetic variations. The constitutive laws close Equation 1 by spec-
+                 R velocity u and relative reaction rate r. For a free energy E[ρ] and quadratic
+ifying the transport
+dissipation D = Ω η|u|2 dx, the maximum dissipation principle gives ηu = −ρ∇(δE/δρ), hence
+                                        ρ                        δE           S(ρ)
+                     u = ξf ,      ξ=     > 0,          f = −∇      ,    r=        ,                  (2)
+                                        η                        δρ            ρ
+where ξ is the transport mobility, f the thermodynamic driving force, and S(ρ) the reaction source.
+System-specific choices are listed in Appendix D.
+Although specifying E and η determines both constitutive factors, (λξ, f /λ) yields the same u for
+any λ > 0. Thus, velocity data constrain only their product, while separate identification of mobility
+and force requires additional constitutive information; related identifiability issues also arise in ther-
+modynamic learning (Huang et al., 2025). The factorization nevertheless provides structure: ξ > 0,
+while f = −∇(δE/δρ) is curl-free for smooth fields. Transport and reaction also enter the balance
+differently: u acts through a divergence, whereas r acts pointwise, motivating separate constitutive
+representations and numerical treatment.
+
+
+                                                    3
+Preprint
+
+
+
+
+                                                                     ρ
+
+
+                                                                     u
+                                                                                      Ldata
+                                                                                       u    + Lcurl Llaw
+                                                                                                     r
+
+
+                                                                     (b) Learning from velocity data
+
+
+                                                                     ρ
+
+
+
+                                                                                      Llaw
+                                                                                       ξ   + Llaw
+                                                                                              f        Llaw
+                                                                                                        r
+
+
+                            (a) Inference                            (c) Learning from known constitutive laws
+Figure 1: Overview of NCL-MCT Solver. (a) At inference, frozen constitutive modules are coupled
+to the shared MCT integrator. At each step, the transport velocity u = ξf and relative reaction rate
+r are reevaluated from the current density to evolve I and M and reconstruct ρ = M I. During
+training, transport is supervised either (b) from reference velocities on PDE snapshots, with curl
+regularization, or (c) directly from known mobility and force laws on density fields, including inde-
+pendently sampled density fields. For reactive systems, r is supervised by the known reaction law
+in both settings.
+
+
+Mass-compression-transport kinematics.           The MCT formulation separates these effects through
+the decomposition ρ = M I:
+                          ∂t I + ∇ · (Iu) = 0,          ∂t M + u · ∇M = M r,                                     (3)
+with I(x, 0) = 1 and M (x, 0) = ρ(x, 0). For a regular material flow with local volume ratio J, I =
+J −1 records compression or expansion, while M = ρJ represents mass per unit reference
+                                                                                     R t volume.
+                                                                                             
+                                                                                0
+Along a material trajectory, M changes through reaction according to M = ρ exp 0 r ds , and
+the product ρ = M I recovers the original density balance. Appendix A derives these identities.
+The representation assumes ρ > 0 and a regular material flow; near vanishing density, the relative
+reaction rate and factorization require additional care.
+
+4     M ETHODOLOGY
+To share one solver interface across diffusive, phase-field, reactive, and multispecies systems, we
+introduce NCL-MCT Solver, which couples PDE-specific constitutive modules to a shared mass-
+compression-transport (MCT) integrator. Following the EnVarA formulation in Section 3, transport
+is represented through positive mobility and thermodynamic driving force, and reaction through
+relative reaction rates. For the autonomous systems considered here, these constitutive responses
+depend on the current density rather than explicitly on the initial condition or elapsed time. Figure 1
+summarizes the framework. A Transport Constitutive Operator learns the mobility-force factor-
+ization, while a Reaction Constitutive Network learns relative reaction rates from local species
+densities (Section 4.1). At inference, the frozen constitutive modules are reevaluated at each MCT
+step to advance the compression and mass factors and reconstruct the density (Section 4.2). For
+each PDE, the constitutive modules are trained separately under either velocity-data supervision or
+known-law supervision, without time integration during training (Section 4.3).
+
+4.1   N EURAL C ONSTITUTIVE M ODELS
+
+Transport constitutive laws depend on spatial variation of the density field, whereas the reaction
+laws considered here are local functions of species densities. We therefore represent transport with
+a field-to-field operator and reaction with a pointwise network.
+The Transport Constitutive Operator uses a Convolutional Neural Operator (CNO) (Raonić et al.,
+2023). The transport responses in Equation 2 involve spatial differential operators of the current
+density field, up to third order in the phase-field systems. Local convolutions capture this differential
+
+
+                                                    4
+Preprint
+
+
+
+
+structure, while the multiscale architecture spans the spatial scales over which these responses act.
+This local representation is also well suited to compactly supported densities in degenerate transport
+systems. Following the EnVarA mobility-force form, we parameterize
+                                     (ξ,
+                                      bb f ) = Cθu [ρ],       u
+                                                              b = ξbb
+                                                                    f,                                (4)
+where ρ is the density field and Cθu is the CNO with trainable parameters θu . A Softplus activation
+enforces ξb > 0 by construction. Known-law supervision directly constrains the driving force, while
+under velocity-data supervision its gradient structure is encouraged by the curl penalty (Section 4.3).
+The Reaction Constitutive Network is a multilayer perceptron (MLP) applied pointwise:
+                                              rb = Rθr [ρ],                                           (5)
+where Rθr maps the current local species densities to relative reaction rates. This preserves the
+locality of the reaction law; predicting the relative reaction rate rather than the source term also lets
+reaction enter the mass-factor evolution multiplicatively through Equation 3. Nonreactive systems
+set r = 0 and omit this module. Network architectures are detailed in Appendix B.
+
+4.2   S HARED MCT T IME I NTEGRATION
+
+The MCT integrator contains no trainable update rule. Given the current density ρn , the constitutive
+modules provide the transport velocity and relative reaction rates required by the shared MCT inte-
+grator. Each time step applies a reaction half-step, a transport step, and a second reaction half-step.
+The transport velocity is evaluated from ρn and held fixed within the step, while the relative reaction
+rates are reevaluated at each reaction stage. The compression factor I is advanced with a conser-
+vative finite-volume method (Eymard et al., 2000), the mass factor M is transported with a semi-
+Lagrangian method (Staniforth & Côté, 1991), and their product reconstructs ρn+1 = M n+1 I n+1 .
+This splitting mirrors the separation of transport and reaction in the continuous formulation, with
+I tracking local compression and M tracking material mass under transport and reaction. Because
+the integrator only queries constitutive responses, numerically evaluated and learned constitutive
+responses enter through the same interface (Appendix I.5). The complete update does not guaran-
+tee exact discrete mass conservation of the reconstructed density or unconditional discrete energy
+dissipation; numerical details and empirical diagnostics are provided in Appendices C and I.2.
+
+4.3   L EARNING C ONSTITUTIVE L AWS
+
+We train the constitutive modules under two sources of supervision: velocity-data supervision and
+known-law supervision. The supervision source is distinct from the source of input density fields,
+which may be trajectory snapshots or independently sampled density fields. For reactive systems,
+both modes use known-law supervision for the relative reaction rate. Neither mode requires time
+integration during training.
+Velocity-data supervision. When paired density-velocity observations are available, the transport
+response can be learned without specifying the underlying mobility and force laws:
+                                  Ldata
+                                   u        u, udata ),
+                                        = ℓ(b                u
+                                                             b = ξbb
+                                                                   f,                                  (6)
+                                                      q , q) = B −1 b ∥b
+where udata is the reference transport velocity and ℓ(b                q (b) − q (b) ∥22 /(∥q (b) ∥22 + ε)
+                                                                     P
+is the per-sample relative squared error over a batch of B density fields, with ε = 10−12 . This
+normalization prevents low-magnitude constitutive quantities from being underweighted.
+Velocity data constrain only the product ξbb f ; they neither resolve the factorization freedom in Sec-
+tion 3 nor enforce the expected gradient structure of the driving force. For smooth fields, the EnVarA
+force f = −∇(δE/δρ) is curl-free. In two dimensions, we encourage this property with
+                                               D                     E
+                                                 (∂x fby − ∂y fbx )2
+                                Lcurl = D                           E   .                           (7)
+                                            (∂x fby )2 + (∂y fbx )2 + ε
+
+Here, fbx and fby are the predicted driving-force components, and ⟨·⟩ denotes the arithmetic mean
+over samples and spatial grid points in a training batch. The penalty is applied to the driving force
+
+
+                                                     5
+Preprint
+
+
+
+
+because spatially varying mobility may produce a transport velocity with nonzero curl; it does not
+guarantee an underlying energy functional.
+The relative reaction rate is supervised by the known source law:
+                                                                  S(ρ)
+                               Llaw
+                                r       r, rlaw ),
+                                    = ℓ(b                rlaw =        ,                           (8)
+                                                                   ρ
+where S is the prescribed local reaction source. Because S can be evaluated directly on any input
+density field, all reported reaction modules use known-law supervision. Extracting relative reaction
+rates from trajectory data would instead require separating reaction from transport. The complete
+velocity-data objective is
+                                   Lvel = Ldata
+                                           u    + λcurl Lcurl + Llaw
+                                                                 r ,                             (9)
+with λcurl = 0.01. The reaction term is omitted for nonreactive systems, and the curl term is omitted
+in one dimension.
+Known-law supervision. When the mobility and thermodynamic driving-force laws are known,
+their evaluations on the current density provide direct constitutive targets:
+
+                             Llaw
+                              ξ
+                                      b ξ law ),
+                                  = ℓ(ξ,               Llaw
+                                                        f       f , f law ).
+                                                            = ℓ(b                                (10)
+These losses constrain the two constitutive factors individually, removing the factorization ambiguity
+inherent in supervising only their product u  b = ξbb f . The force target also supplies the expected
+gradient structure. Using the same reaction loss Llaw
+                                                    r , the complete known-law objective is
+
+                                   Llaw = Llaw
+                                           ξ   + Llaw
+                                                  f   + Llaw
+                                                         r .                                     (11)
+With partial constitutive knowledge, known responses can remain analytical while only the unknown
+constitutive modules are learned. When known-law supervision is applied to independently sampled
+density fields, the framework enables trajectory-free constitutive learning without generating PDE
+solution trajectories.
+
+5     E XPERIMENTS
+We evaluate NCL-MCT Solver along three complementary questions. First, cross-system applica-
+bility asks whether a common constitutive interface covers systems with different transport mech-
+anisms, reactions, and species counts. Second, generalization beyond training conditions evalu-
+ates reuse of trained constitutive modules on unseen initial-condition families and an extended time
+horizon. Third, trajectory-free constitutive learning tests whether known-law supervision can train
+constitutive modules directly on independently sampled density fields without generating solution
+trajectories. PDE-specific constitutive modules are trained separately for each system while shar-
+ing the same constitutive interface and MCT integrator. Unless otherwise specified, training uses
+a 128 × 128 grid and ten snapshots from each of 100 trajectories, yielding 1,000 training samples.
+For the trajectory-based benchmarks, we compare against methods with distinct learning targets:
+F-FNO (Tran et al., 2023) learns a state map, CFO (Hou et al., 2026) learns a temporal derivative,
+and DOOL (Chang et al., 2026) learns dissipative fluxes through an Onsager variational objective.
+All methods use the same sampled training states where applicable, and the baselines are trained for
+100,000 updates. We report mean ± standard deviation over ten test trajectories of the space-time
+relative L2 rollout error Eroll and the maximum per-time relative L2 error Emax . For the extended
+time horizon, we additionally report ∆E = Ē(T ) − Ē(Ttrain ), where Ē(t) is the mean per-time
+relative L2 error across test trajectories. Vel. and Law denote velocity-data and known-law supervi-
+sion, respectively. Appendices D-I provide experimental details, additional rollouts, generalization
+results, and ablations.
+
+5.1   A PPLICABILITY ACROSS R EACTION -D IFFUSION S YSTEMS
+
+Generalized diffusion. We first consider linear diffusion, Cahn-Hilliard (CH), and porous
+medium (PM), representing spatial smoothing, phase separation, and degenerate diffusion with mov-
+ing low-density fronts. The same constitutive interface and MCT integrator are used across all three
+systems. On CH, both NCL-MCT Solver configurations achieve roughly 8× lower rollout errors
+
+
+                                                   6
+    Preprint
+
+
+
+
+    Table 1: Applicability across generalized reaction-diffusion systems. Eroll and Emax denote the
+    space-time and maximum per-time relative L2 errors, reported as mean ± standard deviation over ten
+    test trajectories; NT is the rollout length. Vel./Law denote velocity-data and known-law supervision,
+    respectively. Red/orange mark the best/second-best mean per row. Gray∗ denotes F-FNO results
+    computed from the finite trajectories only; − denotes not evaluated.
+
+                                                  F-FNO                    CFO                   DOOL                NCL-MCT (Vel.)       NCL-MCT (Law)
+    System                 NT     Metric     (Tran et al., 2023)     (Hou et al., 2026)     (Chang et al., 2026)         (Ours)               (Ours)
+    (a) Generalized diffusion
+                                  Eroll    (6.52 ± 1.65) × 10−4 (9.90 ± 4.91) × 10−3 (5.65 ± 1.48) × 10−2 (9.87 ± 2.61) × 10−4 (1.57 ± 0.46) × 10−3
+    Linear Diffusion       600
+                                  Emax     (9.76 ± 2.78) × 10−4 (1.19 ± 0.60) × 10−2 (7.36 ± 1.48) × 10−2 (1.18 ± 0.29) × 10−3 (1.82 ± 0.59) × 10−3
+                                  Eroll    (1.45 ± 0.09) × 10−1 (6.16 ± 1.47) × 10−2 (3.32 ± 0.53) × 10−1 (7.50 ± 1.92) × 10−3 (7.57 ± 1.28) × 10−3
+    CH                   10,000
+                                  Emax     (1.87 ± 0.14) × 10−1 (8.78 ± 2.35) × 10−2 (4.71 ± 0.74) × 10−1 (1.04 ± 0.30) × 10−2 (1.05 ± 0.25) × 10−2
+                                  Eroll    (7.87 ± 4.00) × 10−2 (2.68 ± 0.61) × 10−3 (7.30 ± 2.61) × 10−1 (1.67 ± 0.17) × 10−2 (1.66 ± 0.25) × 10−2
+    PM                    2,000
+                                  Emax     (1.46 ± 0.83) × 10−1 (4.47 ± 1.19) × 10−3 (3.19 ± 1.03) × 100 (2.09 ± 0.20) × 10−2 (2.20 ± 0.34) × 10−2
+    (b) Generalized reaction-diffusion
+                                  Eroll    (5.35 ± 1.32) × 10−4 (5.90 ± 2.79) × 10−3                −              (5.01 ± 1.39) × 10−4 (6.58 ± 0.54) × 10−4
+    Fisher-KPP             500
+                                  Emax     (7.50 ± 1.67) × 10−4 (7.83 ± 3.73) × 10−3                −              (5.96 ± 1.96) × 10−4 (8.90 ± 0.79) × 10−4
+                                  Eroll    (1.29 ± 0.23) × 10−1 (5.64 ± 1.11) × 10−2                −              (8.86 ± 2.21) × 10−3 (9.62 ± 2.13) × 10−3
+    Reactive CH          10,000
+                                  Emax     (1.63 ± 0.34) × 10−1 (7.95 ± 2.06) × 10−2                −              (1.40 ± 0.42) × 10−2 (1.37 ± 0.38) × 10−2
+                                  Eroll    (3.96 ± 3.77) × 10−2 (7.78 ± 3.98) × 10−3                −              (3.84 ± 0.79) × 10−2 (1.56 ± 0.57) × 10−2
+    Reactive PM           1,000
+                                  Emax     (4.81 ± 4.01) × 10−2 (1.52 ± 1.09) × 10−2                −              (5.32 ± 1.16) × 10−2 (1.89 ± 0.55) × 10−2
+    (c) Multispecies reaction-diffusion
+                                  Eroll    (2.73 ± 0.36) × 10−1 (1.28 ± 0.16) × 10−1                −              (2.52 ± 1.77) × 10−2 (2.38 ± 1.26) × 10−2
+    Schnakenberg (U )
+                                  Emax     (7.06 ± 0.63) × 10−1 (2.87 ± 0.49) × 10−1                −              (8.28 ± 8.55) × 10−2 (7.36 ± 6.15) × 10−2
+                         20,000
+                                  Eroll    (1.18 ± 0.18) × 10−1 (4.39 ± 0.59) × 10−2                −              (6.74 ± 3.37) × 10−3 (6.57 ± 2.27) × 10−3
+    Schnakenberg (V )
+                                  Emax     (2.33 ± 0.26) × 10−1 (1.04 ± 0.18) × 10−1                −              (2.19 ± 1.93) × 10−2 (1.97 ± 1.30) × 10−2
+    ∗
+        Finite trajectory counts for gray cells: CH 9/10, Reactive CH 8/10, Schnakenberg 9/10.
+
+
+
+            Reference             F-FNO                   CFO             NCL-MCT (Vel.) NCL-MCT (Law)
+
+
+
+U
+
+
+
+
+V
+
+
+
+
+                                           (a) Results at t = 1 (step 20,000)                                                     (b) Per-time error
+    Figure 2: Schnakenberg comparison for both species. (a) Concentrations U (top) and V (bottom) at
+    t = 1 for a test trajectory on which all methods remain finite. (b) Per-time relative L2 errors over
+    the 20,000-step rollout.
+
+
+    than the strongest evaluated baseline (Table 1(a)). On linear diffusion, F-FNO is more accurate;
+    HC-PINN (Hao et al., 2026) shows a similar advantage (Appendix I.3). On PM, CFO is approxi-
+    mately five to six times more accurate than both NCL-MCT Solver configurations, which remain five
+    to seven times more accurate than F-FNO. PM also exposes the positive-density limitation in Sec-
+    tion 3: compact support creates vanishing-density regions where the factorization ρ = M I requires
+    additional care near the free boundary.
+
+    Generalized reaction-diffusion. Reaction is incorporated by adding a pointwise relative-reaction-
+    rate module to the same transport interface and MCT integrator. The DOOL formulation evaluated
+    here is transport-only and is therefore omitted from these reactive benchmarks. On Fisher-KPP,
+    reactive CH, and reactive PM (Table 1(b)), both NCL-MCT Solver configurations achieve roughly
+    6× lower errors on reactive CH than the strongest evaluated baseline. Vel. attains the lowest mean
+    error on Fisher-KPP, with F-FNO within one standard deviation, whereas CFO is more accurate
+    on reactive PM. The PM ranking follows the nonreactive case, suggesting that degenerate transport
+
+
+                                                                                   7
+   Preprint
+
+
+
+           Reference      F-FNO        CFO       NCL-MCT(Vel.) NCL-MCT(Law)                 Reference     F-FNO        CFO    NCL-MCT(Vel.) NCL-MCT(Law)
+
+
+
+
+t = 0.02
+
+
+
+
+                                                                                 t = 0.06
+t = 0.05
+
+
+
+
+                                                                                 t = 0.08
+t = 0.10
+
+
+
+
+                                                                                 t = 0.10
+                           (a) Unseen initial conditions                                                     (b) Extended time horizon
+   Figure 3: Generalization beyond training conditions on reactive Cahn–Hilliard. (a) From an unseen
+   two-nucleus initial condition, F-FNO distorts the large domains and loses secondary droplets, while
+   CFO merges them into elongated structures; both NCL-MCT Solver configurations better preserve
+   the reference morphology. (b) Models trained on the first 60% of the interval are rolled out over the
+   full horizon. Beyond the training window, CFO loses interior contrast and smooths narrow channels,
+   while both NCL-MCT Solver configurations better preserve the interfaces.
+
+   Table 2: Generalization beyond training conditions, aggregated across systems: (a) unseen initial
+   conditions (five systems, one test trajectory per system) and (b) extended time horizon (four systems,
+   ten test trajectories per system). Entries are averages of the per-system Eroll , Emax , or ∆E values.
+   Per-system results are reported in Appendix G. DOOL is omitted because it covers too few systems
+   for aggregation. Red/orange indicate the best/second-best comparable result per row.
+
+                                                         F-FNO                  CFO                     NCL-MCT (Vel.)          NCL-MCT (Law)
+                                         Metric     (Tran et al., 2023)   (Hou et al., 2026)                (Ours)                  (Ours)
+           Unseen initial conditions     Eroll        1.81 × 10−1∗          1.69 × 10−1                  2.99 × 10−2              2.86 × 10−2
+           (5 systems)                   Emax         2.97 × 10−1∗          2.38 × 10−1                  4.39 × 10−2              4.44 × 10−2
+           Extended time horizon         Eroll        6.75 × 10−2†          6.89 × 10−2                  5.85 × 10−3              5.49 × 10−3
+           (4 systems)                   ∆E           1.25 × 10−2†          4.82 × 10−3                  1.97 × 10−3              2.76 × 10−3
+            ∗
+                F-FNO is nonfinite on CH and Fisher-KPP; the reported average uses only the 3/5 finite systems and is not directly comparable.
+            †
+                For reactive CH, F-FNO statistics use the 9/10 trajectories that remain finite.
+
+
+
+   remains the dominant difficulty. Known-law supervision reduces the reactive-PM error by roughly
+   2.5-3× relative to Vel.; the two supervision modes are otherwise comparable.
+
+   Multispecies reaction-diffusion. For two species, each species uses its own transport module,
+   while the reaction module takes both local concentrations as input and is trained jointly with the
+   transport modules. On Schnakenberg, both NCL-MCT Solver configurations remain stable over the
+   full 20,000-step rollout, with mean errors three to seven times below CFO and about an order of
+   magnitude below F-FNO across both species and metrics (Table 1(c)). F-FNO becomes nonfinite
+   on one trajectory near the end of the rollout, while Law has the lower mean error for both species.
+   Figure 2 shows the error histories: F-FNO errors grow steadily, CFO accumulates larger final-state
+   discrepancies, and both NCL-MCT Solver configurations remain close to the reference.
+
+   5.2            G ENERALIZATION BEYOND T RAINING C ONDITIONS
+
+   Unseen initial conditions. Because the constitutive modules are evaluated from the current den-
+   sity rather than explicitly from the initial condition, changing the initial-condition family changes
+   the density fields encountered during rollout. Keeping the trained models and PDE parameters of
+   Section 5.1, we replace only the initial-condition family with unseen structured fields whose ampli-
+   tudes remain close to the training range, making the shift primarily spatial (Appendix G.1). Across
+   the five systems, both NCL-MCT Solver configurations achieve nearly 6× lower average Eroll than
+   CFO, the strongest baseline that remains finite across all five systems, with per-system margins
+   from 2.4× to 13× (Table 2(a)). Figure 3(a) illustrates the difference on reactive CH. Linear diffu-
+   sion shows the largest change in ranking: F-FNO is the most accurate method in distribution, but its
+   error increases by roughly 260× under the shift, compared with 24-41× for NCL-MCT Solver, and
+   it becomes nonfinite on CH and Fisher-KPP. The relative degradation is not uniformly smaller for
+
+
+                                                                               8
+Preprint
+
+
+
+
+Table 3: Trajectory-free learning from independently sampled density fields. Both methods use the
+same unlabeled density fields and are evaluated on ten held-out initial conditions. Eroll and Emax are
+relative L2 errors (mean ± standard deviation), and NT is the rollout length. Law denotes known-
+law supervision on independently sampled states. Red marks the lower mean per row.
+
+                                                           DOOL              NCL-MCT (Law)
+               System               NT      Metric    (Chang et al., 2026)       (Ours)
+               Linear Diffusion             Eroll    (1.53 ± 1.07) × 10−3 (3.13 ± 1.69) × 10−4
+                                    4,000
+               (1D, DOOL setting)           Emax     (2.39 ± 1.67) × 10−3 (4.05 ± 2.32) × 10−4
+               CH                           Eroll    (7.46 ± 2.90) × 10−3 (6.40 ± 6.66) × 10−3
+                                    2,000
+               (DOOL setting)               Emax     (1.17 ± 0.37) × 10−2 (8.71 ± 8.33) × 10−3
+
+
+
+NCL-MCT Solver; on Fisher-KPP, its error also increases substantially but remains lower because
+its in-distribution error starts from a much smaller level.
+
+Extended time horizon. We train on the first 60% of each reference trajectory and evaluate over
+the full interval, so the final 40% lies beyond the training horizon (Appendix G.2). Averaged across
+the four systems, both NCL-MCT Solver configurations achieve full-window rollout errors about
+an order of magnitude below the evaluated baselines. Their errors change by only 0.90-1.46× rel-
+ative to the corresponding models trained on the full time interval (Table 2(b)). By comparison,
+CFO errors increase by about 1.6× on the two Cahn-Hilliard systems and 5.2× on linear diffusion
+and Fisher-KPP. F-FNO remains strongest on linear diffusion but about an order of magnitude less
+accurate than NCL-MCT Solver on the two Cahn-Hilliard systems. Both NCL-MCT Solver config-
+urations also show the smallest ∆E on linear diffusion, CH, and Fisher-KPP. Only on reactive CH
+does CFO show smaller growth, despite an error at Ttrain that is twelve times larger. Figure 3(b)
+shows the corresponding reactive-CH fields.
+
+5.3   T RAJECTORY-F REE C ONSTITUTIVE L EARNING
+
+Although the experiments above use trajectory snapshots as training inputs, known-law supervision
+does not require them: the targets ξ law and f law in Equation 10 depend only on the current density
+field and can be evaluated on independently sampled density fields. We test this trajectory-free
+setting on one-dimensional linear diffusion and two-dimensional Cahn-Hilliard using the sampled
+training distributions of DOOL (Chang et al., 2026). For each system, DOOL and NCL-MCT Solver
+(Law) use the same sampled density fields; solution trajectories are reserved for held-out rollout
+evaluation (Appendix H). NCL-MCT Solver (Law) achieves lower mean errors on both systems
+(Table 3). On linear diffusion, Eroll and Emax are lower than those of DOOL by factors of 4.9
+and 5.9, respectively. On Cahn-Hilliard, the corresponding factors are 1.2 and 1.4, although the
+two methods remain within one standard deviation. These results show that, on these benchmarks,
+constitutive modules trained directly on independently sampled density fields can support 2,000-
+4,000-step rollouts without solution trajectories during training. Because the methods use different
+time integrators, the quantitative comparison reflects the complete solvers rather than the learning
+objectives alone.
+
+
+6     C ONCLUSION
+
+We presented NCL-MCT Solver, which places neural learning in PDE-specific constitutive re-
+sponses while retaining a shared MCT integrator for density evolution. Transport is represented
+through mobility and thermodynamic driving force, and reaction through relative reaction rates.
+Across seven generalized diffusion and reaction-diffusion systems, the shared constitutive interface
+achieves relative rollout L2 errors of 10−4 to 10−2 and is competitive with or better than the eval-
+uated baselines on most systems. Tests on unseen initial-condition families and an extended time
+horizon further assess reuse of the learned constitutive modules without retraining. With known-law
+supervision on independently sampled density fields, a separate experiment demonstrates trajectory-
+free constitutive learning without generating solution trajectories. Together, these results support
+
+
+                                                         9
+Preprint
+
+
+
+
+learning PDE-specific constitutive responses, rather than the full solution evolution, as an effective
+target for a shared neural PDE framework.
+The current formulation assumes positive densities, with porous-medium systems exposing its lim-
+itation near vanishing density. Future work will extend the factor evolution to such regimes, in-
+vestigate constitutive identification under partially known laws, broaden the treatment of boundary
+conditions (Liu et al., 2024c), incorporate parameter-conditioned constitutive models for inverse
+problems (Cho & Son, 2025), and couple the framework to multiphysics models involving pressure,
+flow, and tissue mechanics (Lu et al., 2019; 2022).
+
+D ISCLOSURE OF AI U SE
+
+The authors developed the research ideas and proposed method, performed the mathematical ver-
+ification, and designed and conducted all experiments. AI tools assisted with identifying relevant
+literature, exploring existing neural network architectures and numerical methods, implementing
+and debugging code, drafting portions of the manuscript, and improving its wording and clarity. All
+code was reviewed and validated by the authors, who take full responsibility for the content and
+conclusions of this work.
+
+R EFERENCES
+E. M. Arruda and M. C. Boyce. A three-dimensional constitutive model for the large stretch behavior
+   of rubber elastic materials. Journal of the Mechanics and Physics of Solids, 41(2):389–412, 1993.
+   doi: 10.1016/0022-5096(93)90013-6.
+
+Yohai Bar-Sinai, Stephan Hoyer, Jason Hickey, and Michael P. Brenner. Learning data-driven dis-
+  cretizations for partial differential equations. Proceedings of the National Academy of Sciences,
+  116(31):15344–15349, 2019. doi: 10.1073/pnas.1814058116.
+
+John W. Cahn and John E. Hilliard. Free energy of a nonuniform system. i. interfacial free energy.
+  The Journal of Chemical Physics, 28(2):258–267, 1958. doi: 10.1063/1.1744102.
+
+Zhipeng Chang, Zhenye Wen, and Xiaofei Zhao. Unsupervised operator learning approach for
+  dissipative equations via Onsager principle. SIAM Journal on Scientific Computing, 48(4):C1060–
+  C1085, 2026. doi: 10.1137/25M1786763.
+
+Sung Woong Cho and Hwijae Son. Physics-informed deep inverse operator networks for solving
+  PDE inverse problems. In International Conference on Learning Representations, 2025. URL
+  https://openreview.net/forum?id=0FxnSZJPmh.
+
+Alexander E. Cohen, Samuel Degnan-Morgenstern, Simon Daubner, Jörn Dunkel, and Martin Z.
+  Bazant. Differentiable learning and control of free-energy-driven pattern dynamics. Physical
+  Review Research, 8:023344, 2026. doi: 10.1103/b8kc-vpwq.
+
+D. C. Drucker and W. Prager. Soil mechanics and plastic analysis or limit design. Quarterly of
+  Applied Mathematics, 10(2):157–165, 1952. doi: 10.1090/qam/48291.
+
+Robert Eymard, Thierry Gallouët, and Raphaèle Herbin. Finite volume methods. In Handbook
+  of Numerical Analysis, volume 7, pp. 713–1018. Elsevier, 2000. doi: 10.1016/S1570-8659(00)
+  07005-8.
+
+Sarah M. Groves, Min-Jhe Lu, Astrid Catalina Alvarez-Yela, Monserrat Gerardo-Ramı́rez, P. Todd
+  Stukenberg, John S. Lowengrub, and Kevin A. Janes. Cell-specific Cahn–Hilliard models predict
+  condensed fates of the chromosomal passenger complex. PLOS Computational Biology, 22(8):
+  e1014568, 2026. doi: 10.1371/journal.pcbi.1014568.
+
+Derek Hansen, Danielle C. Maddix, Shima Alizadeh, Gaurav Gupta, and Michael W. Mahoney.
+  Learning physical models that can respect conservation laws. In Proceedings of the 40th In-
+  ternational Conference on Machine Learning, volume 202 of Proceedings of Machine Learning
+  Research, pp. 12469–12510. PMLR, 2023.
+
+
+                                                 10
+Preprint
+
+
+
+
+Baoli Hao, Chun Liu, Ulisses Braga-Neto, Lifan Wang, and Ming Zhong. Stability in training PINNs
+  for stiff PDEs: Why initial conditions matter. Foundations of Data Science, 2026. doi: 10.3934/
+  fods.2026016. URL https://doi.org/10.3934/fods.2026016. Early Access.
+Masanobu Horie and Naoto Mitsume. Graph neural PDE solvers with conservation and similarity-
+ equivariance. In Proceedings of the 41st International Conference on Machine Learning, volume
+ 235 of Proceedings of Machine Learning Research, pp. 18785–18814. PMLR, 2024.
+Xianglong Hou, Xinquan Huang, and Paris Perdikaris. CFO: Learning continuous-time PDE dynam-
+  ics via flow-matched neural operators. In International Conference on Learning Representations,
+  2026. URL https://openreview.net/forum?id=IQhaeSzyup.
+Ziqing Hu, Chun Liu, Yiwei Wang, and Zhiliang Xu. Energetic variational neural network discretiza-
+  tions of gradient flows. SIAM Journal on Scientific Computing, 46(4):A2528–A2556, 2024. doi:
+  10.1137/22M1529427.
+Shenglin Huang, Zequn He, Bryan Chem, and Celia Reina. Variational Onsager neural networks
+  (VONNs): A thermodynamics-based variational learning strategy for non-equilibrium PDEs.
+  Journal of the Mechanics and Physics of Solids, 163:104856, 2022. doi: 10.1016/j.jmps.2022.
+  104856.
+Shenglin Huang, Zequn He, Nicolas Dirr, Johannes Zimmer, and Celia Reina. Statistical-physics-
+  informed neural networks (Stat-PINNs): A machine learning strategy for coarse-graining dis-
+  sipative dynamics. Journal of the Mechanics and Physics of Solids, 194:105908, 2025. doi:
+  10.1016/j.jmps.2024.105908.
+Yunkyong Hyon, Do Young Kwak, and Chun Liu. Energetic variational approach in complex fluids:
+  Maximum dissipation principle. Discrete and Continuous Dynamical Systems, 26(4):1291–1304,
+  2010. doi: 10.3934/dcds.2010.26.1291.
+Matthias Karlbauer, Timothy Praditia, Sebastian Otte, Sergey Oladyshkin, Wolfgang Nowak, and
+ Martin V. Butz. Composing partial differential equations with physics-aware neural networks. In
+ Proceedings of the 39th International Conference on Machine Learning, volume 162 of Proceed-
+ ings of Machine Learning Research, pp. 10773–10801. PMLR, 2022.
+George Em Karniadakis, Ioannis G. Kevrekidis, Lu Lu, Paris Perdikaris, Sifan Wang, and Liu Yang.
+  Physics-informed machine learning. Nature Reviews Physics, 3:422–440, 2021. doi: 10.1038/
+  s42254-021-00314-5.
+Dmitrii Kochkov, Jamie A. Smith, Ayya Alieva, Qing Wang, Michael P. Brenner, and Stephan
+ Hoyer. Machine learning–accelerated computational fluid dynamics. Proceedings of the National
+ Academy of Sciences, 118(21):e2101784118, 2021. doi: 10.1073/pnas.2101784118.
+Zongyi Li, Nikola Kovachki, Kamyar Azizzadenesheli, Burigede Liu, Kaushik Bhattacharya, An-
+  drew Stuart, and Anima Anandkumar. Fourier neural operator for parametric partial differen-
+  tial equations. In International Conference on Learning Representations, 2021. URL https:
+  //openreview.net/forum?id=c8P9NQVtmnO.
+Zongyi Li, Hongkai Zheng, Nikola Kovachki, David Jin, Haoxuan Chen, Burigede Liu, Kamyar
+  Azizzadenesheli, and Anima Anandkumar. Physics-informed neural operator for learning partial
+  differential equations. ACM / IMS Journal of Data Science, 1(3):1–27, 2024. doi: 10.1145/
+  3648506.
+Ning Liu, Yiming Fan, Xianyi Zeng, Milan Klöwer, Lu Zhang, and Yue Yu. Harnessing the power
+  of neural operators with automatically encoded conservation laws. In Proceedings of the 41st
+  International Conference on Machine Learning, volume 235 of Proceedings of Machine Learning
+  Research, pp. 30965–30997. PMLR, 2024a.
+Pengwei Liu, Zhongkai Hao, Xingyu Ren, Hangjie Yuan, Jiayang Ren, and Dong Ni. PAPM: A
+  physics-aware proxy model for process systems. In Proceedings of the 41st International Con-
+  ference on Machine Learning, volume 235 of Proceedings of Machine Learning Research, pp.
+  31080–31105. PMLR, 2024b.
+
+
+                                               11
+Preprint
+
+
+
+
+Ziyuan Liu, Haifeng Wang, Hong Zhang, Kaijun Bao, Xu Qian, and Songhe Song. Render unto nu-
+  merics: Orthogonal polynomial neural operator for PDEs with nonperiodic boundary conditions.
+  SIAM Journal on Scientific Computing, 46(4):C323–C348, 2024c. doi: 10.1137/23M1556320.
+Lu Lu, Pengzhan Jin, Guofei Pang, Zhongqiang Zhang, and George Em Karniadakis. Learning
+  nonlinear operators via DeepONet based on the universal approximation theorem of operators.
+  Nature Machine Intelligence, 3(3):218–229, 2021. doi: 10.1038/s42256-021-00302-5.
+Min-Jhe Lu, Chun Liu, and Shuwang Li. Nonlinear simulation of an elastic tumor-host interface.
+ Computational and Mathematical Biophysics, 7(1):25–47, 2019. doi: 10.1515/cmb-2019-0003.
+Min-Jhe Lu, Wenrui Hao, Chun Liu, John Lowengrub, and Shuwang Li. Nonlinear simulation of
+ vascular tumor growth with chemotaxis and the control of necrosis. Journal of Computational
+ Physics, 459:111153, 2022. doi: 10.1016/j.jcp.2022.111153.
+Yubin Lu, Xiaofan Li, Chun Liu, Qi Tang, and Yiwei Wang. Learning generalized diffusions using
+  an energetic variational approach. Communications in Computational Physics, 40(2):389–412,
+  2026a. doi: 10.4208/cicp.OA-2025-0141.
+Yubin Lu, Xiaofan Li, Chun Liu, Qi Tang, and Yiwei Wang. Structure-aware variational learning
+  of a class of generalized diffusions. Physica D: Nonlinear Phenomena, 498:135404, 2026b. doi:
+  10.1016/j.physd.2026.135404.
+Pingchuan Ma, Peter Yichen Chen, Bolei Deng, Joshua B. Tenenbaum, Tao Du, Chuang Gan, and
+  Wojciech Matusik. Learning neural constitutive laws from motion observations for generaliz-
+  able PDE dynamics. In Proceedings of the 40th International Conference on Machine Learning,
+  volume 202 of Proceedings of Machine Learning Research, pp. 23279–23300. PMLR, 2023.
+Luis Mandl, Dibyajyoti Nayak, Tim Ricken, and Somdatta Goswami. Physics-informed time-
+  integrated DeepONet: Temporal tangent space operator learning for high-accuracy inference.
+  Computer Methods in Applied Mechanics and Engineering, 455:118917, 2026. doi: 10.1016/
+  j.cma.2026.118917.
+Himangi Mittal, Peiye Zhuang, Hsin-Ying Lee, and Shubham Tulsiani. UniPhy: Learning a unified
+  constitutive model for inverse physics simulation. In Proceedings of the IEEE/CVF Conference on
+  Computer Vision and Pattern Recognition, pp. 16208–16218, 2025. doi: 10.1109/CVPR52734.
+  2025.01511.
+Dibyajyoti Nayak and Somdatta Goswami. TI-DeepONet: Learnable time integration for stable
+  long-term extrapolation. Computer Methods in Applied Mechanics and Engineering, 456:118960,
+  2026. doi: 10.1016/j.cma.2026.118960.
+PhysicsNeMo Contributors. NVIDIA PhysicsNeMo: An Open-Source Framework for Physics-
+  Based Deep Learning in Science and Engineering, 2023. URL https://github.com/
+  NVIDIA/physicsnemo.
+Maziar Raissi, Paris Perdikaris, and George Em Karniadakis. Physics-informed neural networks:
+ A deep learning framework for solving forward and inverse problems involving nonlinear partial
+ differential equations. Journal of Computational Physics, 378:686–707, 2019. doi: 10.1016/j.jcp.
+ 2018.10.045.
+Chengping Rao, Pu Ren, Qi Wang, Oral Buyukozturk, Hao Sun, and Yang Liu. Encoding physics
+  to learn reaction–diffusion processes. Nature Machine Intelligence, 5(7):765–779, 2023. doi:
+  10.1038/s42256-023-00685-7.
+Bogdan Raonić, Roberto Molinaro, Tim De Ryck, Tobias Rohner, Francesca Bartolucci, Rima Alai-
+  fari, Siddhartha Mishra, and Emmanuel De Bézenac. Convolutional neural operators for robust
+  and accurate learning of PDEs. In Advances in Neural Information Processing Systems, vol-
+  ume 36, pp. 77187–77200. Curran Associates, Inc., 2023. doi: 10.52202/075280-3376.
+Andrew Staniforth and Jean Côté. Semi-lagrangian integration schemes for atmospheric models:
+  A review. Monthly Weather Review, 119(9):2206–2223, 1991. doi: 10.1175/1520-0493(1991)
+  119⟨2206:SLISFA⟩2.0.CO;2.
+
+
+                                               12
+Preprint
+
+
+
+
+Yusuke Tanaka, Takaharu Yaguchi, Tomoharu Iwata, and Naonori Ueda. Energy-consistent neural
+  operators for Hamiltonian and dissipative partial differential equations. In Proceedings of the 28th
+  International Conference on Artificial Intelligence and Statistics, volume 258 of Proceedings of
+  Machine Learning Research, pp. 1882–1890. PMLR, 2025.
+Alasdair Tran, Alexander Mathews, Lexing Xie, and Cheng Soon Ong. Factorized fourier neural
+  operators. In International Conference on Learning Representations, 2023. URL https://
+  openreview.net/forum?id=tmIiMPl4IPa.
+L. R. G. Treloar. The elasticity of a network of long-chain molecules. I. Transactions of the Faraday
+   Society, 39:36–41, 1943. doi: 10.1039/TF9433900036.
+Alan M. Turing. The chemical basis of morphogenesis. Philosophical Transactions of the Royal
+  Society of London. Series B, Biological Sciences, 237(641):37–72, 1952. doi: 10.1098/rstb.1952.
+  0012.
+Juan Luis Vázquez. The Porous Medium Equation: Mathematical Theory. Oxford Mathematical
+  Monographs. Oxford University Press, 2006. doi: 10.1093/acprof:oso/9780198569039.001.0001.
+Yiwei Wang, Chun Liu, Pei Liu, and Bob Eisenberg. Field theory of reaction-diffusion: Law of
+  mass action with an energetic variational approach. Physical Review E, 102(6):062147, 2020.
+  doi: 10.1103/PhysRevE.102.062147.
+Xueguang Xie, Shu Yan, Shiwen Jia, Siyu Yang, Aimin Hao, Yang Gao, and Peng Yu. PC-NCLaws:
+  Physics-embedded conditional neural constitutive laws for elastoplastic materials. In Pacific
+  Graphics 2025 Conference Papers, 2025. doi: 10.2312/pg.20251266.
+
+
+
+
+                                                 13
+Preprint
+
+
+
+
+A PPENDIX OVERVIEW
+• A. Derivation of the Mass-Compression Formulation
+    – A.1 Compression-Volume Relation
+    – A.2 Mass Tracing with Reaction
+    – A.3 Equivalence to the Density Balance
+• B. Network Architectures
+    – B.1 Transport Constitutive Operator
+    – B.2 Reaction Constitutive Network
+• C. Numerical Updates and Rollout Algorithm of MCT
+• D. PDE Specifications
+• E. Dataset Generation and Training Settings
+     – E.1 Initial-Condition Families
+     – E.2 Trajectories, Snapshots and Supervision
+     – E.3 Training and Baselines
+• F. Per-System Rollout Results
+• G. Generalization Beyond Training Conditions
+    – G.1 Unseen Initial Conditions
+    – G.2 Extended Time Horizon
+• H. Trajectory-Free Constitutive Learning
+• I. Additional Experimental Results
+    – I.1 Training Time and Inference Time
+    – I.2 Evaluation of Mass Behavior
+    – I.3 Comparison with HC-PINN
+    – I.4 Ablation of Constitutive Parameterization and Supervision
+    – I.5 Ablation of Constitutive Modularity
+    – I.6 Ablation of the Curl Penalty Weight
+
+
+
+
+                                               14
+Preprint
+
+
+
+
+A     D ERIVATION OF THE M ASS -C OMPRESSION F ORMULATION
+We verify the continuous identities used in Section 3 for a single species. Assume smooth fields,
+ρ > 0, I > 0, M > 0, and a differentiable, invertible material flow. Let Dt = ∂t + u · ∇ and
+ρ0 (x) = ρ(x, 0). The derivation holds on material regions where the flow is defined and does not
+require periodic boundaries. At inflow boundaries, incoming factor data must be consistent with the
+prescribed density.
+
+A.1   C OMPRESSION -VOLUME R ELATION
+
+Let Φ(a, t) denote the material flow generated by u, with Φ(a, 0) = a, and let
+                                     J(a, t) = det ∇a Φ(a, t) > 0
+be its local volume ratio. Differentiating the flow with respect to a and applying Jacobi’s determinant
+formula gives
+                                      dJ
+                                          = J(∇ · u)(Φ(a, t), t).                                  (12)
+                                       dt
+Meanwhile, Equation 3 implies Dt I = −I∇ · u. Therefore,
+                     d
+                                                          I(Φ(a, t), t) = J(a, t)−1 ,
+                                             
+                        I(Φ(a, t), t)J(a, t) = 0,                                                  (13)
+                    dt
+where the second identity uses I(x, 0) = 1 and J(a, 0) = 1. Thus, I = J −1 measures local
+compression: contraction decreases J and increases I, while expansion has the opposite effect.
+
+A.2   M ASS T RACING WITH R EACTION
+
+Since ρ = M I and IJ = 1, a material volume element satisfies
+                         ρ(Φ(a, t), t)J(a, t) da = M (Φ(a, t), t) da.                 (14)
+Hence, M = ρJ represents mass per unit reference volume. Its material equation Dt M = M r
+integrates to                                    Z            t      
+                        M (Φ(a, t), t) = ρ0 (a) exp                r(Φ(a, s), s) ds .             (15)
+                                                           0
+This identity remains valid when r depends on ρ, since the integral is evaluated along the evolving
+material trajectory. For any reference region A whose image remains inside Ω,
+                              Z                   Z
+                                     ρ(x, t) dx =   M (Φ(a, t), t) da.                         (16)
+                              Φ(A,t)                   A
+When r = 0, M is constant along material trajectories; otherwise, it records reaction-induced mass
+production or loss.
+
+A.3   E QUIVALENCE TO THE D ENSITY BALANCE
+
+For ρ = M I, the product rule and Equation 3 give
+                                                                     
+                  ∂t ρ + ∇ · (ρu) = M ∂t I + ∇ · (Iu) + I ∂t M + u · ∇M
+                                                                                                  (17)
+                                    = IM r = ρr.
+The initialization I(x, 0) = 1 and M (x, 0) = ρ0 (x) recovers the prescribed initial density.
+Conversely, let a positive ρ satisfy Equation 1. Construct M from its material equation with the
+same velocity and relative reaction rate, with M (x, 0) = ρ0 (x), and set I = ρ/M . Since
+                                        Dt ρ = ρ(r − ∇ · u),
+we obtain
+                                       Dt ρ     ρ
+                               Dt I =        − 2 Dt M = −I∇ · u,                             (18)
+                                        M      M
+which is equivalent to the conservative equation for I in Equation 3. Boundary data must likewise
+satisfy ρ = M I together with the boundary conditions of the original problem.
+These identities concern the continuous formulation and do not imply discrete guarantees for accu-
+racy, conservation, positivity, or energy dissipation.
+
+
+                                                  15
+Preprint
+
+
+
+
+B     N ETWORK A RCHITECTURES
+
+This appendix details the constitutive modules introduced in Section 4.1. Both modules are trained
+without differentiating through the MCT integrator; training settings are given in Appendix E.3. The
+implementation is built on PhysicsNeMo (PhysicsNeMo Contributors, 2023), and the code will be
+made publicly available.
+
+B.1   T RANSPORT C ONSTITUTIVE O PERATOR
+
+The transport module uses a Convolutional Neural Operator (CNO) (Raonić et al., 2023) with the
+density field as input. Its three output channels represent a scalar mobility ξb and the two compo-
+nents of the driving force bf = (fbx , fby ). Softplus enforces ξb > 0, while the force components use
+unrestricted linear outputs; their product gives the transport velocity u b = ξbb f . The direct-velocity
+ablation instead outputs two unrestricted velocity components.
+All two-dimensional configurations use two downsampling levels with encoder widths (8, 16, 32),
+one residual block per encoder level, and two residual blocks at the bottleneck. The decoder uses
+concatenated skip connections, with hidden width 32 for lifting and projection. Convolutions use
+3 × 3 kernels with circular padding and LeakyReLU activations with slope 0.01. Downsampling
+uses average pooling and upsampling uses nearest-neighbor interpolation.
+
+B.2   R EACTION C ONSTITUTIVE N ETWORK
+
+The reaction module is a pointwise MLP with weights shared across grid points. It has two hid-
+den layers of width 32, tanh activations, and a residual connection between the hidden layers. The
+network maps local species densities to unrestricted relative reaction rates without using neighbor-
+ing grid values. Weights use Xavier normal initialization, and biases are initialized to zero. For
+Schnakenberg, two independent transport CNOs process U and V , respectively, while the reaction
+MLP takes both local concentrations and predicts their two relative reaction rates using the same
+hidden architecture.
+
+
+C     N UMERICAL U PDATES AND ROLLOUT A LGORITHM OF MCT
+
+Algorithm 1 summarizes the split MCT integrator for a single species, following Section 4.2. Each
+step applies a reaction half-step, a transport step, and a second reaction half-step. The transport
+velocity v = u b [ρn ] is evaluated at the beginning of the step and held fixed throughout it, while the
+relative reaction rates are reevaluated at each reaction stage.
+
+Reaction update. With I fixed, the reaction subproblem is ∂t M = M r. Using m = log M gives
+∂t m = r. Let R denote the relative-reaction-rate map. An explicit midpoint update over h = ∆t/2
+is
+                                                                     
+                           k1 = R(Iem ),         k2 = R Iem+(h/2)k1 ,
+                                                                                             (19)
+                         M + = em+hk2 .
+
+Products and exponentials act pointwise. Nonreactive systems omit these updates.
+
+Compression and mass transport. Let Lv denote the unsplit conservative upwind finite-volume
+discretization of −∇ · (Iv), using arithmetic averages of neighboring velocities at cell faces. The
+compression factor is advanced by SSPRK2:
+
+                                I (1) = I n + ∆t Lv (I n ),
+                                                 h                      i                           (20)
+                              I n+1 = 21 I n + 12 I (1) + ∆t Lv (I (1) ) .
+
+
+                                                   16
+Preprint
+
+
+
+
+Algorithm 1 Single-species rollout with NCL-MCT Solver
+Require: Initial density ρ0 , constitutive modules, step size ∆t, number of steps K, reinitialization interval
+    Treinit
+Ensure: Predicted densities {ρn }K  n=1
+ 1: Initialize I 0 ← 1, M 0 ← ρ0 , and τ ← 0.
+ 2: for n = 0, . . . , K − 1 do
+ 3:     Evaluate v ← u   b [ρn ].
+ 4:     M a ← R EACTION S TEP(M n , I n , ∆t/2).
+ 5:     Update I n 7→ I n+1 using Equation 20.
+ 6:     Update M a 7→ M b using Equation 21.
+ 7:     M n+1 ← R EACTION S TEP(M b , I n+1 , ∆t/2).
+ 8:     Reconstruct ρn+1 ← M n+1 I n+1 .
+ 9:     τ ← τ + ∆t.
+10:      if τ ≥ Treinit then
+11:           I n+1 ← 1, M n+1 ← ρn+1 , and τ ← 0.
+12:      end if
+13: end for
+14: function R EACTION S TEP(M, I, h)
+15:      if the system is nonreactive then
+16:           return M
+17:      end if
+18:      Set m ← log M and apply Equation 19.
+19:      return M + .
+20: end function
+
+
+For mass transport, let P[q](x) denote periodic interpolation of the grid field q. The midpoint semi-
+Lagrangian update of the post-reaction factor M a is
+                                        xmid = x − ∆t
+                                                   2 v(x),
+                                        xdep = x − ∆t P[v](xmid ),                                       (21)
+                                        b              a
+                                     M (x) = P[M ](xdep ).
+The two-dimensional implementation uses bilinear interpolation. Interpolating v does not reevaluate
+the constitutive module. The second reaction half-step then uses M b and I n+1 .
+
+Boundary treatment and reinitialization. The MCT integrator supports periodic and Robin
+boundary conditions, while the constitutive modules used here assume periodic domains. All bench-
+marks therefore use periodic boundaries, implemented through circular convolutional padding and
+periodic grid indexing and interpolation. Reinitialization resets I = 1 and M = ρ every Treinit , lim-
+iting factor distortion while preserving the reconstructed density rather than correcting accumulated
+density error.
+
+Scope of numerical properties. For the finite-volume update in Equation 20, periodic fluxes can-
+cel in the discrete integral of I, while positivity requires the corresponding time-step restriction.
+The logarithmic reaction update preserves M > 0 in exact arithmetic, and bilinear interpolation
+preserves nonnegativity. These substep properties do not imply exact conservation of the total re-
+constructed density mass or unconditional discrete energy dissipation. Because the transport veloc-
+ity is frozen at the beginning of each step, the midpoint and SSPRK2 substeps also do not establish
+second-order accuracy of the complete coupled method. Appendix I.2 therefore evaluates the com-
+plete rollout empirically.
+
+
+
+
+                                                     17
+Preprint
+
+
+
+
+D     PDE S PECIFICATIONS
+
+This appendix specifies each benchmark system: its governing equation and parameters, transport
+constitutive pair (ξ, f ), relative reaction rate r, and reference solution. All systems are posed on
+square periodic domains and discretized on a 128 × 128 uniform grid; their initial-condition families
+are given in Appendix E.1. Table 4 summarizes the configurations.
+
+D.1    L INEAR D IFFUSION
+
+PDE definition.     Linear diffusion on the periodic unit square Ω = [0, 1)2 is
+                               ∂t ρ = D ∆ρ,              D = 1,           t ∈ [0, 0.03].                         (22)
+The system is nonreactive, with transport constitutive pair
+                               1
+                          ξ=     ,      f = −D∇ρ,                    u = ξf = −D∇ log ρ.                         (23)
+                               ρ
+
+This corresponds to the free energy E[ρ] = D                     ρ2 dx.
+                                                         R
+                                           2                 Ω
+
+
+Reference solution. Because Equation 22 is linear and periodic, the reference is given by exact
+Fourier-mode decay,
+                             ρb(k, t) = ρb(k, 0) exp −D|k|2 t ,
+                                                             
+                                                                                           (24)
+and therefore introduces no time-integration error. Trajectories are stored at 601 uniformly spaced
+times over [0, 0.03], giving ∆t = 5 × 10−5 .
+
+D.2    C AHN -H ILLIARD
+
+PDE definition.     The shifted Cahn-Hilliard equation on Ω = [0, 1)2 is
+                                                                                                    2
+             ∂t ρ = ∆µ,        µ = −γ1 ∆ρ + γ2 W ′ (ρ),                   W (ρ) = 14 (ρ − ρc )2 − h2 .           (25)
+
+We use γ1 = 10−4 , γ2 = 1, ρc = 1, h = 0.5, and t ∈ [0, 0.1], so the two wells lie at ρ = 0.5 and
+ρ = 1.5. The system is nonreactive, with transport constitutive pair
+                                                   1
+                                              ξ=     ,            f = −∇µ.                                       (26)
+                                                   ρ
+Here µ = δE/δρ for
+                                              Z
+                                                    γ1    2
+                                                                              
+                                     E[ρ] =         2 |∇ρ| + γ2 W (ρ)             dx.
+                                               Ω
+
+
+Table 4: Per-system configurations. “Order” denotes the highest spatial derivative order in the
+transport term of the density equation, and “Reaction” the local reaction source type. ∆t and NT
+denote the reference time-step size and number of time steps, respectively. † Degenerate transport,
+for which the flux vanishes as ρ → 0 at the free boundary.
+
+    System                Domain       Order              Reaction                 t range       ∆t         NT
+                                2                                                                     −5
+    Linear Diffusion       [0, 1)       2                        None             [0, 0.03]    5 × 10       600
+    CH                     [0, 1)2      4                        None              [0, 0.1]      10−5        104
+    PM                    [−4, 4)2      2†                       None             [0.1, 0.3]     10−4       2000
+    Fisher-KPP             [0, 1)2      2                 Logistic             [0, 0.015]      3 × 10−5     500
+    Reactive CH            [0, 1)2      4                Double-well            [0, 0.1]         10−5        104
+    Reactive PM           [−4, 4)2      2†                Logistic             [0.1, 0.6]      5 × 10−4     1000
+    Schnakenberg          [0, 1)2        2         Activator-inhibitor              [0, 1]     5 × 10−5    2 × 104
+
+
+                                                             18
+Preprint
+
+
+
+
+Reference solution. We use a Fourier pseudospectral discretization with a semi-implicit update
+that treats the biharmonic term implicitly and the double-well term explicitly:
+                                             ρb n − ∆t γ2 |k|2 W
+                                                               c′ (ρn )
+                                  ρb n+1 =                              .                            (27)
+                                                   1 + ∆t γ1 |k|4
+Each step clamps ρ to [0.45, 1.55] and restores the initial mean density. Trajectories are stored at
+10,001 uniformly spaced times over [0, 0.1], giving ∆t = 10−5 .
+
+D.3    P OROUS M EDIUM
+
+PDE definition.     The porous medium equation on Ω = [−4, 4)2 is
+                            ∂t ρ = ∆(ρm ),        m = 2,        t ∈ [0.1, 0.3].                      (28)
+                                             m
+Its transport form uses the pressure p(ρ) = m−1 ρm−1 and transport constitutive pair
+
+                              ξ = 1,    f = −∇p(ρ) = −mρm−2 ∇ρ.                           (29)
+                                                    1
+                                                            ρm dx. For m = 2, f = −2∇ρ, so the
+                                                        R
+This corresponds to the internal energy E[ρ] = m−1        Ω
+transport response contains no 1/ρ singularity at the free boundary.
+
+Reference solution. The reference is the closed-form Barenblatt similarity solution of Equa-
+tion 28, evaluated at each stored time. It therefore introduces no time-discretization error and rep-
+resents compact support exactly through the positive-part operator. Trajectories are stored at 2,001
+uniformly spaced times over [0.1, 0.3], giving ∆t = 10−4 .
+
+D.4    F ISHER -KPP
+
+PDE definition.     The Fisher-KPP equation on Ω = [0, 1)2 is
+              ∂t ρ = D ∆ρ + λρ(1 − ρ),           D = 1,         λ = 5,       t ∈ [0, 0.015].         (30)
+Its transport and reaction responses are
+                                  1
+                             ξ=     ,      f = −D∇ρ,           r = λ(1 − ρ).                         (31)
+                                  ρ
+The transport pair is identical to linear diffusion, while the logistic source corresponds to the relative
+reaction rate r.
+
+Reference solution. The reference uses Strang splitting, with exact Fourier-mode decay for diffu-
+sion and the closed-form logistic update
+                                                  ρ
+                                     ρ 7→                  ,                                (32)
+                                          ρ + (1 − ρ)e−λ∆t
+so splitting is the only source of time-discretization error. Trajectories are stored at 501 uniformly
+spaced times over [0, 0.015], giving ∆t = 3 × 10−5 .
+
+D.5    R EACTIVE C AHN -H ILLIARD
+
+PDE definition.     We augment Equation 25 with the local reaction source
+                                                                                  ρ − ρc
+                  ∂t ρ = ∆µ + G(ρ),          G(ρ) = hλ ϕ(1 − ϕ2 ),          ϕ=           .           (33)
+                                                                                    h
+We retain γ1 = 10−4 , γ2 = 1, ρc = 1, h = 0.5, and t ∈ [0, 0.1], with λ = 5. The transport pair is
+that of Appendix D.2, and the relative reaction rate is r = G(ρ)/ρ. The source drives ϕ toward ±1,
+reinforcing phase separation rather than dissipating the Cahn-Hilliard free energy.
+
+Reference solution. The reference uses Strang splitting between the Cahn-Hilliard update Equa-
+tion 27 and a closed-form reaction update in the phase variable ϕ. Each step clamps ρ to [0.45, 1.55].
+Trajectories are stored at 10,001 uniformly spaced times over [0, 0.1], giving ∆t = 10−5 .
+
+
+                                                    19
+Preprint
+
+
+
+
+D.6   R EACTIVE P OROUS M EDIUM
+
+PDE definition.    We augment Equation 28 with a logistic source on Ω = [−4, 4)2 :
+             ∂t ρ = ∆(ρm ) + λρ(1 − ρ),        m = 2,        λ = 5,      t ∈ [0.1, 0.6].      (34)
+The transport pair is that of Appendix D.3, with relative reaction rate r = λ(1 − ρ).
+
+Reference solution. The reference uses Strang splitting between the closed-form logistic reac-
+tion and an explicit nonlinear-diffusion update using a second-order five-point Laplacian on ρm .
+Physical-space differentiation avoids Gibbs oscillations from Fourier differentiation near the free
+boundary. The density is kept nonnegative after each substep. Trajectories are stored at 1,001 uni-
+formly spaced times over [0.1, 0.6], giving ∆t = 5 × 10−4 .
+
+D.7   S CHNAKENBERG S YSTEM
+
+PDE definition.    The two-species Schnakenberg system on Ω = [0, 1)2 is
+                              ∂t U = DU ∆U + γ a − U + U 2 V ,
+                                                              
+                                                                                              (35)
+                              ∂t V = DV ∆V + γ b − U 2 V .
+                                                          
+
+We use DU = 8 × 10−3 , DV = 1.6 × 10−1 , γ = 36, a = 0.171, b = 0.629, and t ∈ [0, 1]. The
+homogeneous steady state U ∗ = a + b, V ∗ = b/(a + b)2 lies in the Turing-unstable regime. Each
+species has its own transport constitutive pair and relative reaction rate:
+                   1                                 Ss (U, V )
+                ξs = ,     fs = −Ds ∇s,        rs =             ,       s ∈ {U, V }.          (36)
+                   s                                     s
+Here SU and SV denote the reaction sources in Equation 35.
+
+Reference solution. The reference uses Strang splitting: exact Fourier-mode diffusion half-steps
+enclose a fourth-order Runge-Kutta step for the local reaction system. Trajectories are stored at
+20,001 uniformly spaced times over [0, 1], giving ∆t = 5 × 10−5 .
+
+
+
+
+                                                 20
+Preprint
+
+
+
+
+E     DATASET G ENERATION AND T RAINING S ETTINGS
+
+Appendix D specifies the equations, reference solvers, and time intervals. This appendix defines the
+initial-condition distributions, retained snapshots and supervision targets, and training settings.
+
+E.1     I NITIAL -C ONDITION FAMILIES
+
+Four of the seven systems draw initial conditions from a Gaussian Fourier random field (GFRF),
+                                                                                     
+                       X      akx ky cos 2π(kx x + ky y) + bkx ky sin 2π(kx x + ky y)
+          g(x, y) =                                                                     ,   (37)
+                    0≤k ,k ≤K
+                                                    (1 + kx2 + ky2 )3/2
+                           x    y
+                      (kx ,ky )̸=(0,0)
+
+                                               i.i.d.
+with K ∼ U{3, . . . , 8} and akx ky , bkx ky ∼ N (0, 1). The spectral decay produces smooth fields,
+which are linearly rescaled to the positive density range of each system. The remaining three systems
+use structure-specific families: compactly supported profiles for the two porous-medium systems
+and perturbations of the homogeneous steady state for Schnakenberg. Table 5 summarizes all seven
+families.
+
+Porous medium.        We use Barenblatt profiles centered at the origin,
+                                1/(m−1)                          d               (m − 1)β
+                                                                                        α
+    ρ(x, t) = t−α C − k|x|2 t−2β +
+                 
+                                         ,              α=                ,        β=     , , k=
+                                                             d(m − 1) + 2            2m d
+                                                                                          (38)
+with d = 2 and C chosen so that the support radius at t = 0.3 is R ∼ U [0.8, 1.4], keeping the
+support away from the boundary. Because Equation 38 is an exact solution, it also provides the
+reference trajectory (Appendix D.3).
+
+Reactive porous medium. Because the logistic source is incompatible with Equation 38, we use
+compactly supported radial profiles,
+                     h      |x|2 i2
+           ρ0 (x) = A max 1 − 2 , 0   ,                  R ∼ U[0.8, 2.0],          A ∼ U[0.5, 0.9].    (39)
+                              R
+These profiles generate finite-support spreading fronts under the reactive porous-medium dynamics.
+
+Schnakenberg.       We perturb the homogeneous steady state U ∗ = a + b, V ∗ = b/(a + b)2 multi-
+plicatively:
+                               U0 = U ∗ (1 + εU gU ),        V0 = V ∗ (1 + εV gV ),                    (40)
+where gU and gV are independent realizations of Equation 37 with K ∼ U {2, . . . , 6}, normalized to
+unit maximum magnitude. The amplitudes εU ∼ U [0.04, 0.10] and εV ∼ U [0.12, 0.22] are chosen
+so that pattern formation is driven primarily by the Turing instability.
+
+
+Table 5: Initial-condition family of each system. GFRF denotes Equation 37 rescaled to the stated
+density range. Random parameters are sampled independently for each trajectory.
+
+       System             Family                                 Range or random parameters
+       Linear Diffusion   GFRF, Equation 37                      ρ0 ∈ [0.1, 1.0]
+       CH                 GFRF, Equation 37                      ρ0 ∈ [0.7, 1.3]
+       Fisher-KPP         GFRF, Equation 37                      ρ0 ∈ [0.2, 0.8]
+       Reactive CH        GFRF, Equation 37                      ρ0 ∈ [0.7, 1.3]
+       PM                 Barenblatt, Equation 38             R ∼ U[0.8, 1.4]
+       Reactive PM        Radial bump, Equation 39            R ∼ U[0.8, 2.0], A ∼ U[0.5, 0.9]
+       Schnakenberg       Perturbed steady state, Equation 40 εU ∼ U[0.04, 0.10], εV ∼ U[0.12, 0.22]
+
+
+                                                        21
+Preprint
+
+
+
+
+E.2   T RAJECTORIES , S NAPSHOTS AND S UPERVISION
+
+For each system, we sample 100 training and 10 test initial conditions with disjoint random seeds
+and integrate them over the interval in Table 4. Ten snapshots per training trajectory are selected
+at approximately uniform increments of cumulative state-space arc length, measured by successive
+relative L2 changes and including the initial and terminal states. This yields 1,000 training snapshots
+per system; for multispecies systems, all species are retained at the same times.
+For NCL-MCT Solver, constitutive targets are evaluated on the fly at each snapshot using the an-
+alytical laws in Appendix D. Each snapshot therefore supervises the map from the current density
+to its constitutive responses rather than to a future density state. Sequential held-out trajectories are
+used for rollout evaluation.
+
+E.3   T RAINING AND BASELINES
+
+Schedule. Unless otherwise stated, all models are trained from the same 1,000 snapshots per sys-
+tem for 100,000 updates, with batch size 32 (16 for Schnakenberg) and seed 42. Our constitutive
+modules (Appendix B) use Adam with learning rate 10−3 , weight decay 10−6 , and exponential de-
+cay by 0.95 every 5,000 steps. Each baseline retains its original optimizer settings described below;
+we equalize the training data and update budget rather than the optimizer schedule.
+
+F-FNO (Tran et al., 2023). F-FNO maps the current density to the next state using six factorized
+Fourier layers of width 64, retaining 32 modes per dimension. Spectral weights are shared across
+layers, and each layer is followed by a feed-forward block with expansion factor 4 (733,506 param-
+eters). Inputs and outputs are normalized channel-wise by the training mean and standard deviation,
+and Gaussian noise with standard deviation 0.01 is added to normalized inputs during training. Op-
+timization uses AdamW with learning rate 2.5 × 10−3 , weight decay 10−4 , 500 warm-up steps, and
+cosine decay, minimizing per-sample relative L2 error. The target is the reference state one native
+time step after each sampled state, and rollout applies the learned map autoregressively for the full
+NT steps in Table 4.
+
+CFO (Hou et al., 2026). CFO learns the temporal derivative through flow matching rather than
+a fixed-increment state map, and therefore uses the same ten trajectory snapshots without one-step
+targets. Snapshot times are normalized to [0, 1], and a quintic spline through the ten states pro-
+vides time-derivative targets. A two-dimensional U-Net with channel widths (64, 128, 256), group
+normalization, Swish activations, and a 256-dimensional sinusoidal time embedding (8.10 × 106 pa-
+rameters) regresses the spline derivative under a stochastic interpolant with bridge amplitude 10−5 .
+Optimization uses Adam with learning rate 2 × 10−4 and unnormalized mean squared error. Rollout
+integrates the learned temporal-derivative field on the reference time grid using Heun’s method with
+two substeps per interval.
+
+DOOL (Chang et al., 2026). DOOL is trained without response targets by minimizing an Onsager
+Rayleighian on the same 1,000 snapshots. A Fourier DeepONet (64,620 parameters) predicts the
+two components of the mass flux. Its branch network reads the lowest 8×8 Fourier coefficients of the
+density, while the trunk network reads normalized grid coordinates; both use four tanh hidden layers
+of width 70 with rank 120. For porous medium, the predicted flux is multiplied by the density so that
+it vanishes in the empty region. Optimization uses Adam with learning rate 10−3 . Rollout integrates
+∂t ρ = −∇ · j using spectral divergence and Heun’s method on the reference time grid, with density
+clamped to the training range at each stage. We evaluate the transport-only DOOL formulation
+on the three nonreactive systems; reactive benchmarks would require additional problem-specific
+Onsager/Rayleighian design.
+
+Common protocol. All methods operate on the same 128 × 128 density fields and are initialized
+from the same reference state at the first evaluation time. No additional PDE-coefficient channels
+are supplied. Architecture-specific inputs, including CFO’s time embedding and DOOL’s trunk
+coordinates, are retained as required by their formulations. Parameter counts and training/inference
+costs are reported in Table 10.
+
+
+
+
+                                                   22
+Preprint
+
+
+
+
+F               P ER -S YSTEM ROLLOUT R ESULTS
+
+This appendix shows predicted fields from one representative test trajectory at three times for each
+system in Table 1. Evaluation uses the ten test initial conditions of Appendix E.2, with rollouts
+advanced on the reference time grids in Table 4 using the reference solutions of Appendix D. Each
+figure shows one column per method, ordered as reference, F-FNO, CFO, DOOL where applicable,
+NCL-MCT Solver (Vel.), and NCL-MCT Solver (Law), with time increasing downward and a shared
+color scale within each system.
+
+F.1                  L INEAR D IFFUSION
+                       Reference    F-FNO          CFO             DOOL    NCL-MCT (Vel.)   NCL-MCT (Law)
+    t = 1.5 × 10−3
+    t = 6.0 × 10−3
+    t = 2.4 × 10−2
+
+
+
+
+                                   Figure 4: Linear diffusion, 600-step rollout to T = 0.03.
+
+Both NCL-MCT Solver configurations track the smoothing dynamics throughout, with Vel. achiev-
+ing about two-thirds of the Law error on both metrics and F-FNO remaining more accurate (Ta-
+ble 1(a)). All methods are visually similar at the first two times. By t = 2.4 × 10−2 , the field is
+nearly uniform; only DOOL retains visible grid-aligned texture, while the remaining discrepancies
+are diffuse and low amplitude.
+
+F.2                  C AHN -H ILLIARD
+                       Reference    F-FNO          CFO             DOOL    NCL-MCT (Vel.)   NCL-MCT (Law)
+      t = 0.01
+      t = 0.05
+      t = 0.10
+
+
+
+
+                                   Figure 5: Cahn-Hilliard, 10,000-step rollout to T = 0.1.
+
+
+                                                              23
+Preprint
+
+
+
+
+This system shows the largest margin over the evaluated baselines: both NCL-MCT Solver configu-
+rations remain near 7.5 × 10−3 , roughly eight times below the strongest baseline (Table 1(a)). Both
+recover the domain count and locations at T = 0.1, including the isolated droplet near the lower
+boundary. F-FNO captures the two phases but distorts several interfaces, while DOOL loses the
+reference domain topology.
+
+F.3               P OROUS M EDIUM
+                                 Reference       F-FNO           CFO          DOOL    NCL-MCT (Vel.)   NCL-MCT (Law)
+      t = 0.1
+      t = 0.2
+      t = 0.3
+
+
+
+
+                                        Figure 6: Porous medium, 2,000-step rollout from t = 0.1 to T = 0.3.
+
+This is the only nonreactive system on which CFO is more accurate than both NCL-MCT Solver
+configurations. At this color scale, all methods except DOOL are visually close to the reference, so
+CFO’s quantitative advantage in Table 1(a) is not apparent from the fields alone. DOOL develops
+grid-aligned artifacts extending from the support boundary, consistent with the difficulty of spectral
+differentiation across a free boundary.
+
+F.4               F ISHER -KPP
+                                     Reference           F-FNO         CFO       NCL-MCT (Vel.)   NCL-MCT (Law)
+                t = 7.5 × 10−4
+                t = 4.5 × 10−3
+                t = 1.2 × 10−2
+
+
+
+
+                                                 Figure 7: Fisher-KPP, 500-step rollout to T = 0.015.
+
+
+                                                                         24
+Preprint
+
+
+
+
+Vel. is more accurate than Law on both metrics, giving the largest gap between the two NCL-
+MCT Solver supervision modes among the scalar reactive systems, with F-FNO between them (Ta-
+ble 1(b)). The two NCL-MCT Solver predictions are visually similar, indicating that the quantitative
+gap mainly reflects accumulated amplitude error rather than a qualitative difference in the predicted
+fields.
+
+F.5   R EACTIVE C AHN -H ILLIARD
+                    Reference       F-FNO            CFO       NCL-MCT (Vel.)   NCL-MCT (Law)
+      t = 0.01
+      t = 0.05
+      t = 0.10
+
+
+
+
+                         Figure 8: Reactive Cahn-Hilliard, 10,000-step rollout to T = 0.1.
+
+Errors for both NCL-MCT Solver configurations remain close to those of the nonreactive CH system
+in Appendix F.2, indicating that the added reaction module does not substantially degrade long-
+rollout accuracy. The reaction drives both phases toward the wells, producing more saturated domain
+interiors than in Figure 5. Both configurations closely follow the reference, while F-FNO misplaces
+several smaller features.
+
+F.6   R EACTIVE P OROUS M EDIUM
+                    Reference       F-FNO            CFO       NCL-MCT (Vel.)   NCL-MCT (Law)
+      t = 0.125
+      t = 0.35
+      t = 0.60
+
+
+
+
+                  Figure 9: Reactive porous medium, 1,000-step rollout from t = 0.1 to T = 0.6.
+
+
+                                                        25
+Preprint
+
+
+
+
+The ranking follows that of the nonreactive porous-medium system in Appendix F.3, consistent
+with degenerate transport remaining the dominant difficulty. All methods capture the spreading and
+saturation of the support, but Vel. develops grid-scale oscillations inside the support as the front
+advances. These oscillations correspond to its higher error relative to Law in Table 1(b) and are
+absent in the nonreactive case of Figure 6.
+
+F.7   S CHNAKENBERG S YSTEM
+                Reference       F-FNO            CFO        NCL-MCT (Vel.)   NCL-MCT (Law)
+      t = 0.2
+      t = 0.6
+      t = 1.0
+
+
+
+
+                    Figure 10: Schnakenberg, activator U , 20,000-step rollout to T = 1.
+                Reference       F-FNO            CFO        NCL-MCT (Vel.)   NCL-MCT (Law)
+      t = 0.2
+      t = 0.6
+      t = 1.0
+
+
+
+
+                    Figure 11: Schnakenberg, inhibitor V , 20,000-step rollout to T = 1.
+
+This 20,000-step rollout is the longest in the benchmark. Both NCL-MCT Solver configurations
+remain stable throughout, with mean errors differing by less than one standard deviation for both
+species. F-FNO is about an order of magnitude less accurate and becomes nonfinite on one of ten test
+trajectories after roughly 18,000 steps. Both configurations reproduce the reference spot locations
+and elongated structures at T = 1. CFO captures the overall pattern type but displaces several spots,
+while F-FNO produces a finer, more uniform spot pattern and develops a localized circular defect
+from t ≈ 0.6 onward.
+
+
+
+                                                    26
+Preprint
+
+
+
+
+G     G ENERALIZATION B EYOND T RAINING C ONDITIONS
+Both experiments reuse the in-distribution checkpoints of Appendix E.3 without modification: no
+model is retrained or retuned, and no evaluation trajectory is used for training or checkpoint se-
+lection. Errors are reported at 101 uniformly spaced frames, following the in-distribution protocol.
+We compare NCL-MCT Solver (Vel.), NCL-MCT Solver (Law), CFO, and F-FNO, together with
+DOOL on the two nonreactive systems included in these tests.
+
+G.1   U NSEEN I NITIAL C ONDITIONS
+
+Experimental settings. We test five systems: linear diffusion, CH, Fisher-KPP, reactive CH, and
+Schnakenberg. For each system, we replace the initial-condition family of Appendix E.1 with a
+structured family absent from training, while keeping the PDE parameters, domain, 128 × 128 grid,
+reference solver, and time interval unchanged. The training distributions contain smooth Gaus-
+sian Fourier random fields for four systems and random perturbations of the homogeneous steady
+state for Schnakenberg, whereas the out-of-distribution families in Table 6 impose explicit spatial
+structure, including blobs, rings, and spot lattices. This setting tests whether constitutive responses
+learned from one distribution of density fields remain accurate under a different spatial organiza-
+tion. Each system uses one fixed out-of-distribution initial condition, so the reported results are
+single rollouts rather than trajectory averages. Figures 12-17 show the corresponding rollouts, with
+columns ordered as reference, F-FNO, CFO, DOOL where applicable, NCL-MCT Solver (Vel.), and
+NCL-MCT Solver (Law), and time increasing downward.
+
+Out-of-distribution initial conditions.       For linear diffusion, six Gaussian blobs are placed at equal
+angles on a circle,
+                             5                    
+                                                 2
+                                    exp − |x−c k|
+                             X
+           ρ0 (x) = ρb + A                  2σ 2     ,     ρb = 0.05, A = 0.85, σ = 0.06,            (41)
+                             k=0
+
+with ck = (0.5, 0.5) + 0.22(cos θk , sin θk ), θk = 2πk/6, clipped to [0, 1]. The two CH systems use
+two blobs of unequal size on a uniform background,
+                                                      2
+                                                                                     2
+                                                                                         
+           ρ0 (x) = 0.85 + 0.24 exp − |x−(0.28,0.28)|
+                                               2·0.122     + 0.30 exp − |x−(0.72,0.72)|
+                                                                              2·0.132      ,    (42)
+
+clipped to [0.85, 1.15], so phase separation starts from two prescribed nuclei rather than a random
+field. The Fisher-KPP family is a Gaussian ring with a jittered center and width,
+                                             2
+                                                
+            ρ0 (x) = ρb + A exp − (|x−c|−R)
+                                        2σ 2      ,     ρb = 0.05, A = 0.55, R = 0.22,          (43)
+
+with c = (0.5, 0.5) + δ, δ ∼ N (0, 0.022 I), σ = 0.06 + η, and η ∼ N (0, 0.0052 ), clipped to
+[10−6 , 0.95]. Unlike the training fields, it contains an interior minimum and a single radial length
+scale. The Schnakenberg family perturbs the homogeneous steady state with a normalized hexagonal
+spot lattice,
+          C0 = C ∗ 1 + ε C g ,
+                             
+                                     g ∝ cos θx + cos θy + cos(θx + θy ),     C ∈ {U, V },       (44)
+with θx = 2πkx + φx , θy = 2πky + φy , k ∼ U{1, 2, 3}, and independent uniform phases. The
+field g is made mean-free and normalized to unit maximum magnitude. The relative amplitudes are
+
+Table 6: Out-of-distribution initial-condition families. Distances are periodic on each system’s do-
+main, and all fields are evaluated on the same 128 × 128 grid and rolled out over the same interval
+as the corresponding in-distribution test.
+
+                 System              Family                                        NT
+                 Linear Diffusion    Six Gaussian blobs on a circle, Equation 41   600
+                 CH                  Two Gaussian blobs, Equation 42               104
+                 Fisher-KPP          Gaussian ring, Equation 43                    500
+                 Reactive CH         Two Gaussian blobs, Equation 42               104
+                 Schnakenberg        Spot lattice, Equation 44                     2 × 104
+
+
+                                                     27
+Preprint
+
+
+
+
+Table 7: Rollout errors from unseen initial conditions. Each system uses one fixed out-of-distribution
+initial condition, so entries are single rollouts without standard deviations. Eroll and Emax denote
+space-time and maximum per-time relative L2 errors. Red/orange mark the best/second-best result
+per row. NaN denotes a nonfinite rollout; − denotes a method not evaluated under the adopted
+formulation. Schnakenberg U and V count as one system.
+
+                                         F-FNO                CFO               DOOL            NCL-MCT (Vel.) NCL-MCT (Law)
+System               NT      Metric (Tran et al., 2023) (Hou et al., 2026) (Chang et al., 2026)     (Ours)         (Ours)
+                             Eroll    1.71 × 10−1       1.65 × 10−1       5.74 × 10−1       4.07 × 10−2       3.81 × 10−2
+Linear Diffusion     600
+                             Emax     2.87 × 10−1       2.13 × 10−1       7.01 × 10−1       4.67 × 10−2       4.44 × 10−2
+                             Eroll        NaN           2.31 × 10−1       4.28 × 10−1       1.96 × 10−2       1.83 × 10−2
+CH                  10,000
+                             Emax         NaN           3.30 × 10−1       5.33 × 10−1       3.63 × 10−2       3.32 × 10−2
+                             Eroll        NaN           1.35 × 10−1            −            5.71 × 10−2       5.36 × 10−2
+Fisher-KPP           500
+                             Emax         NaN           1.71 × 10−1            −            7.02 × 10−2       6.57 × 10−2
+                             Eroll    2.31 × 10−1       2.12 × 10−1            −            1.97 × 10−2       2.03 × 10−2
+Reactive CH         10,000
+                             Emax     3.27 × 10−1       2.96 × 10−1            −            4.30 × 10−2       4.07 × 10−2
+                             Eroll    2.13 × 10−1       1.51 × 10−1            −            1.94 × 10−2       1.96 × 10−2
+Schnakenberg (U )
+                             Emax     4.15 × 10−1       2.68 × 10−1            −            3.69 × 10−2       6.07 × 10−2
+                    20,000
+                             Eroll    6.89 × 10−2       4.83 × 10−2            −            5.22 × 10−3       5.37 × 10−3
+Schnakenberg (V )
+                             Emax     1.40 × 10−1       8.88 × 10−2            −            1.03 × 10−2       1.48 × 10−2
+
+
+
+restricted to the lower 40% of the training range, εU ∈ [0.04, 0.064] and εV ∈ [0.12, 0.16]. The
+candidate is accepted only if U , V , and U 2 V remain finite and within the range spanned by the
+training snapshots throughout the rollout, restricting the shift primarily to spatial organization rather
+than amplitude.
+
+Results. Table 7 reports the five rollouts. NCL-MCT Solver achieves the lowest error on all five
+systems and both metrics, with Eroll between 2.4× and 13× below the strongest finite baseline. The
+two supervision modes remain within 10% of each other in Eroll across all five systems, although
+their Emax differs more on Schnakenberg. Linear diffusion shows the largest change in ranking. F-
+FNO, the most accurate method in distribution, increases its error by roughly 260× to 1.71 × 10−1 ,
+whereas NCL-MCT Solver increases by 24-41× and remains four to six times lower. F-FNO also
+becomes nonfinite on CH and Fisher-KPP. The relative degradation is not uniformly smaller for
+NCL-MCT Solver: on Fisher-KPP, its error increases by about two orders of magnitude, compared
+with 23× for CFO. Thus, lower out-of-distribution error does not imply uniformly smaller relative
+degradation from the in-distribution setting. Schnakenberg behaves differently: all methods except
+CFO are at least as accurate as in distribution. The imposed spot lattice is geometrically unseen but
+resembles the pattern selected by the Turing dynamics, making this primarily a structural-transfer
+test rather than a uniformly harder initial condition.
+
+
+
+
+                                                              28
+Preprint
+
+
+
+
+                    Reference   F-FNO   CFO         DOOL   NCL-MCT (Vel.)   NCL-MCT (Law)
+   t = 1.5 × 10−3
+   t = 4.5 × 10−3
+   t = 1.5 × 10−2
+
+
+
+
+Figure 12: Linear diffusion from six Gaussian blobs on a circle, Equation 41, 600-step rollout to
+T = 0.03. F-FNO loses the six-fold symmetry early and replaces the ring by two smeared diagonal
+lobes, while CFO retains separated blobs after the reference has largely merged them. DOOL shows
+distinct blobs on a striped background where the reference is nearly uniform. Both NCL-MCT
+Solver configurations more closely follow the merging and flattening dynamics.
+
+
+
+
+                    Reference   F-FNO   CFO         DOOL   NCL-MCT (Vel.)   NCL-MCT (Law)
+     t = 0.01
+     t = 0.05
+     t = 0.10
+
+
+
+
+Figure 13: Cahn-Hilliard from two Gaussian blobs, Equation 42, 10,000-step rollout to T = 0.1. F-
+FNO develops oscillations near the domain boundary at t = 0.01 and becomes nonfinite thereafter.
+CFO recovers the two large domains but forms an irregular set of secondary droplets, while DOOL
+produces a different labyrinthine pattern. Both NCL-MCT Solver configurations reproduce the two
+domains and the regular array of smaller droplets between them.
+
+
+
+
+                                               29
+Preprint
+
+
+
+
+                    Reference   F-FNO     CFO          NCL-MCT (Vel.)   NCL-MCT (Law)
+
+   t = 7.5 × 10−4
+   t = 4.5 × 10−3
+   t = 9 × 10−3
+
+
+
+
+Figure 14: Fisher-KPP from a Gaussian ring, Equation 43, 500-step rollout to T = 0.015. The blank
+panel denotes a nonfinite state. F-FNO breaks the ring into two bright lobes and develops diagonal
+striping before becoming nonfinite, while CFO retains a pronounced central depression after the
+reference has filled in. Both NCL-MCT Solver configurations more closely follow the filling of the
+ring.
+
+
+
+
+                    Reference   F-FNO     CFO          NCL-MCT (Vel.)   NCL-MCT (Law)
+     t = 0.02
+     t = 0.05
+     t = 0.10
+
+
+
+
+Figure 15: Reactive Cahn-Hilliard from two Gaussian blobs, Equation 42, 10,000-step rollout to
+T = 0.1. F-FNO preserves the large domains but distorts their shape and misses the secondary-
+droplet array, while CFO merges the droplets into elongated structures. Both NCL-MCT Solver
+configurations recover the array more closely.
+
+
+
+
+                                                30
+Preprint
+
+
+
+             Reference     F-FNO            CFO          NCL-MCT (Vel.)   NCL-MCT (Law)
+
+
+
+
+   t = 0.1
+   t = 0.5
+   t = 1.0
+
+
+
+
+Figure 16: Schnakenberg from a spot lattice, Equation 44, activator U , 20,000-step rollout to T = 1.
+All methods remain finite but differ in pattern selection: F-FNO retains smooth diagonal bands
+where the reference has formed a spot lattice, while CFO and both NCL-MCT Solver configurations
+resolve the spots more closely.
+
+             Reference     F-FNO            CFO          NCL-MCT (Vel.)   NCL-MCT (Law)
+   t = 0.1
+   t = 0.5
+   t = 1.0
+
+
+
+
+Figure 17: Schnakenberg from a spot lattice, inhibitor V , with the same rollout and layout as Fig-
+ure 16. The F-FNO banding is more visible for this species.
+
+
+
+
+                                                  31
+Preprint
+
+
+
+
+G.2       E XTENDED T IME H ORIZON
+
+Experimental settings. For linear diffusion, CH, Fisher-KPP, and reactive CH, models are trained
+on trajectories truncated to the first 60% of the reference interval and evaluated over the full interval
+in Table 4, giving an extrapolation factor of 1/0.6 ≈ 1.67. The step size, PDE parameters, and ten
+in-distribution test initial conditions remain unchanged, so the final 40% of each rollout lies beyond
+the training horizon. Table 8 lists the training and evaluation horizons.
+
+Metrics. Eroll and Emax are computed over the full evaluation window. To separate extrapolation
+error from the error already present at the training horizon, we evaluate the trajectory-averaged per-
+time error Ē(t) = N1 i Ei (t) and report
+                      P
+
+                                                  ∆E = Ē(T ) − Ē(Ttrain ),                                          (45)
+which measures the additional error from the training horizon to the final time. We report the
+difference rather than a ratio because the errors at Ttrain differ substantially across methods.
+
+Results. Relative to Table 1, the errors of both NCL-MCT Solver configurations change by factors
+of 0.90-1.46, so evaluation to 1.67× the shortened training horizon increases error by at most about
+50% (Table 9). CFO errors increase by 1.6× on the two Cahn-Hilliard systems and by 5.2× on linear
+diffusion and Fisher-KPP. F-FNO changes little overall, remaining strongest on linear diffusion and
+
+Table 8: Training and evaluation horizons. NTtrain and NT denote the rollout lengths of the truncated
+training trajectories and full evaluation, respectively. The step size is unchanged and equals the
+reference ∆t in Table 4.
+
+              System                    ∆t          NTtrain (Ttrain )        NT (T )       Extrapolated fraction
+                                             −5
+              Linear diffusion      5 × 10              360 (0.018)        600 (0.03)               40%
+              CH                      10−5              6,000 (0.06)      10,000 (0.1)              40%
+              Fisher-KPP            3 × 10−5            300 (0.009)       500 (0.015)               40%
+              Reactive CH             10−5              6,000 (0.06)      10,000 (0.1)              40%
+
+Table 9: Rollout errors with the horizon extended beyond training. Models are trained on the first
+60% of each reference interval and evaluated over the full interval (Table 8). Eroll and Emax are
+mean ± standard deviation over ten test trajectories. Ē(Ttrain ) is the trajectory-averaged per-time
+error at the training horizon, and ∆E is its change to the final time, Equation 45. Red/orange mark
+the best/second-best mean per row.
+
+                                       F-FNO                       CFO              NCL-MCT (Vel.)          NCL-MCT (Law)
+System              Metric        (Tran et al., 2023)        (Hou et al., 2026)         (Ours)                  (Ours)
+                 Eroll       (4.01 ± 1.26) × 10−4 (5.13 ± 1.04) × 10−2 (1.44 ± 0.27) × 10−3 (2.26 ± 0.37) × 10−3
+                 Emax        (6.09 ± 1.87) × 10−4 (6.25 ± 1.52) × 10−2 (1.62 ± 0.34) × 10−3 (2.60 ± 0.46) × 10−3
+Linear Diffusion
+                 Ē(Ttrain )     3.78 × 10−4          5.82 × 10−2          1.58 × 10−3          2.53 × 10−3
+                 ∆E              1.69 × 10−4          2.09 × 10−3          −5.72 × 10−5         −1.75 × 10−4
+                    Eroll       (1.39 ± 0.17) × 10−1 (9.96 ± 0.86) × 10−2 (9.27 ± 3.03) × 10−3 (1.03 ± 0.27) × 10−2
+                    Emax        (1.85 ± 0.24) × 10−1 (1.26 ± 0.13) × 10−1 (1.44 ± 0.89) × 10−2 (1.49 ± 0.37) × 10−2
+CH
+                    Ē(Ttrain )     1.59 × 10−1          1.10 × 10−1          9.69 × 10−3          1.17 × 10−2
+                    ∆E              2.60 × 10−2          6.70 × 10−3          4.51 × 10−3          2.57 × 10−3
+                    Eroll       (5.96 ± 1.36) × 10−4 (3.10 ± 0.41) × 10−2 (5.02 ± 0.82) × 10−4 (7.48 ± 0.64) × 10−4
+                    Emax        (8.02 ± 1.72) × 10−4 (4.15 ± 0.68) × 10−2 (5.81 ± 1.09) × 10−4 (9.64 ± 0.96) × 10−4
+Fisher-KPP
+                    Ē(Ttrain )     6.32 × 10−4          3.45 × 10−2          5.50 × 10−4          8.32 × 10−4
+                    ∆E              1.67 × 10−4          6.88 × 10−3          2.37 × 10−5          1.32 × 10−4
+                    Eroll       (1.30 ± 0.22) × 10−1∗ (9.36 ± 0.71) × 10−2 (1.22 ± 0.40) × 10−2 (8.69 ± 1.59) × 10−3
+                    Emax        (1.72 ± 0.27) × 10−1∗ (1.18 ± 0.12) × 10−1 (1.96 ± 0.81) × 10−2 (1.38 ± 0.32) × 10−2
+Reactive CH
+                    Ē(Ttrain )     1.48 × 10−1∗          1.04 × 10−1          1.21 × 10−2          8.32 × 10−3
+                    ∆E              2.36 × 10−2∗          3.61 × 10−3          6.56 × 10−3          5.36 × 10−3
+∗
+    F-FNO becomes nonfinite on the seventh reactive CH trajectory after 400 steps, within the training horizon;
+    its reported statistics use the nine remaining trajectories.
+
+
+
+                                                                32
+Preprint
+
+
+
+
+second on Fisher-KPP but about an order of magnitude less accurate than NCL-MCT Solver on the
+two Cahn-Hilliard systems. At Ttrain , NCL-MCT Solver is already about an order of magnitude
+below both baselines on the two Cahn-Hilliard systems. Its ∆E is also smallest on linear diffusion,
+CH, and Fisher-KPP; only on reactive CH does CFO show smaller growth, despite an error at Ttrain
+that is twelve times larger. On linear diffusion, ∆E < 0 for both NCL-MCT Solver configurations,
+indicating that the final relative error is lower than at the training horizon.
+                   Reference       F-FNO            CFO        NCL-MCT (Vel.)   NCL-MCT (Law)
+      t = 0.018
+      t = 0.024
+      t = 0.030
+
+
+
+
+Figure 18: Linear diffusion, trained to Ttrain = 0.018 and rolled out to T = 0.03. Only the first row
+lies within the training horizon.
+
+                   Reference       F-FNO            CFO        NCL-MCT (Vel.)   NCL-MCT (Law)
+      t = 0.06
+      t = 0.08
+      t = 0.1
+
+
+
+
+                  Figure 19: Cahn-Hilliard, trained to Ttrain = 0.06 and rolled out to T = 0.1.
+
+
+
+
+                                                       33
+Preprint
+
+
+
+                  Reference       F-FNO            CFO       NCL-MCT (Vel.)   NCL-MCT (Law)
+
+
+
+
+     t = 0.009
+     t = 0.012
+     t = 0.015
+
+
+
+
+                 Figure 20: Fisher-KPP, trained to Ttrain = 0.009 and rolled out to T = 0.015.
+
+                  Reference       F-FNO            CFO       NCL-MCT (Vel.)   NCL-MCT (Law)
+     t = 0.06
+     t = 0.08
+     t = 0.10
+
+
+
+
+         Figure 21: Reactive Cahn-Hilliard, trained to Ttrain = 0.06 and rolled out to T = 0.1.
+
+
+
+
+                                                      34
+Preprint
+
+
+
+
+H    T RAJECTORY-F REE C ONSTITUTIVE L EARNING
+In Section 5.1 and Section 5.2, both supervision modes use density fields drawn from precomputed
+solution trajectories. Thus, even under known-law supervision, a numerical solver is still required
+to construct the training set. Here we remove this dependence. Because the targets ξ law and f law
+in Llaw
+     ξ   and Llaw
+                f    (Equation 10) depend only on the current density field, they can be evaluated
+on arbitrary positive fields without time integration. We therefore train directly on independently
+sampled density fields. We compare NCL-MCT Solver (Law) with DOOL (Chang et al., 2026) on
+the one-dimensional linear diffusion and two-dimensional Cahn-Hilliard settings used in that work,
+using the same independently sampled density fields for both methods. Neither method uses solution
+trajectories, velocity fields, or time derivatives during training; trajectories are reserved for held-out
+rollout evaluation.
+
+One-dimensional linear diffusion (DOOL setting).           We consider
+                             ∂t ρ = D ∂xx ρ,       x ∈ [−π, π),     D = 1,                           (46)
+with periodic boundary conditions. Both methods are trained on the same 50 independently sampled
+density fields on a 128-point grid,
+                                 ρ(x) = 2 + c sin x,       c ∼ U [0, 1),                             (47)
+which are positive by construction. NCL-MCT Solver uses the factorization ξ = 1/ρ and f = −∂x ρ,
+yielding u = −∂x ρ/ρ as in Appendix D.1. This also illustrates the factorization freedom discussed
+in Section 3. For this one-dimensional experiment, we replace the per-sample normalization of ℓ in
+Section 4.3 with batch-level normalization: the batch-summed squared error is divided by the batch-
+summed squared target norm, with denominator stabilizer 10−12 . DOOL minimizes its Onsager
+objective on the same fields; its branch network receives the first eight complex Fourier coefficients,
+including the constant mode, covering all active modes in Equation 47. Both methods are trained for
+50,000 Adam updates with learning rate 10−3 and batch size 50. Evaluation uses ten held-out initial
+conditions from the same family: c = 1 for the visualized example and nine independent draws.
+The reference solution is given analytically by Fourier-mode decay. Both methods roll out to T = 1
+with ∆t = 2.5 × 10−4 , corresponding to NT = 4,000 steps, with errors measured at 101 frames.
+NCL-MCT Solver advances the one-dimensional MCT factors I and M , whereas DOOL advances
+its predicted flux using spectral differentiation and second-order Runge-Kutta.
+
+Two-dimensional Cahn-Hilliard (DOOL setting). We reproduce Example 3.5 of Chang et al.
+(2026),
+               ∂t u = ∆ −γ1 ∆u + γ2 (u3 − u) ,        x ∈ (0, 2π)2 , γ1 = γ2 = 1,
+                                              
+                                                                                                 (48)
+with periodic boundary conditions. Because NCL-MCT Solver uses the mobility factorization ξ =
+1/ρ, it requires a positive density, whereas u changes sign. We therefore represent each state as
+ρ = u + 2 and evaluate the constitutive law through u = ρ − 2. This constant shift preserves the
+underlying dynamics while ensuring positivity; ρ is clamped to [0.7, 3.3]. The training set contains
+1,000 independently sampled density fields on a 128 × 128 grid from the K = 1 truncated Fourier
+coefficient box of Chang et al. (2026). We use 1,000 rather than its Nb = 100 states so that the
+sample budget matches the other two-dimensional experiments in this paper. Both methods are
+trained for 100,000 updates with batch size 32. Evaluation uses ten held-out initial conditions from
+the same band-limited family. The first is u0 = sin x sin y, following Chang et al. (2026), and
+the remaining nine are independent draws. Reference trajectories are computed with ETDRK4 at
+∆t = 10−5 and stored every 10−4 up to T = 0.2. Both methods roll out with ∆t = 10−4 ,
+corresponding to NT = 2,000 steps, with errors measured at 101 frames.
+
+Results. Table 3 reports errors over the ten held-out initial conditions. On one-dimensional linear
+diffusion, NCL-MCT Solver (Law) achieves Eroll = 3.13 × 10−4 and Emax = 4.05 × 10−4 , re-
+spectively 4.9× and 5.9× lower than DOOL. Figure 22 shows the corresponding space-time density
+for the visualized initial condition. Both methods reproduce the single-mode decay, with the main
+visible discrepancy at early times. On two-dimensional Cahn-Hilliard, NCL-MCT Solver (Law)
+also attains lower mean errors, with Eroll = 6.40 × 10−3 and Emax = 8.71 × 10−3 , compared with
+7.46×10−3 and 1.17×10−2 for DOOL. The standard deviation of NCL-MCT Solver is larger, how-
+ever, and the two methods remain within one standard deviation; variation across initial conditions
+
+
+                                                   35
+Preprint
+
+
+
+
+is therefore larger than the difference in their mean errors. Figure 23 shows one representative roll-
+out. Both methods preserve the checkerboard structure over all 2,000 steps, while at the final time
+DOOL exhibits grid-aligned texture and a distorted interface, consistent with the artifacts observed
+in Appendix F. NCL-MCT Solver remains smooth, with slightly reduced contrast in the domain
+interiors. These experiments show that known-law supervision on independently sampled density
+fields can train constitutive modules without solution trajectories and subsequently support long-
+horizon rollout through the MCT integrator. Because DOOL and NCL-MCT Solver use different
+time integrators, the quantitative comparison reflects the complete solvers rather than the training
+objectives alone.
+
+
+
+
+Figure 22: One-dimensional linear diffusion in the DOOL setting after trajectory-free constitutive
+learning. Space-time density for the visualized initial condition ρ0 (x) = 2 + sin x, rolled out to
+T = 1 in 4,000 steps. Columns show the analytic solution, NCL-MCT Solver (Law), and DOOL
+using a shared color scale.
+
+                        Reference           DOOL              NCL-MCT (Law)
+             t = 0.01
+             t = 0.10
+             t = 0.20
+
+
+
+
+Figure 23: Two-dimensional Cahn-Hilliard in the DOOL setting after trajectory-free constitutive
+learning, shown using the shifted density ρ = u + 2 for u0 = sin x sin y. The rollout extends to
+T = 0.2 over 2,000 steps. Rows show t = 0.01, 0.10, and 0.20, with an independent color scale for
+each row. Both methods preserve the checkerboard structure, while at the final time DOOL exhibits
+grid-aligned texture and a distorted interface; NCL-MCT Solver (Law) remains smooth with slightly
+weaker interior contrast.
+
+
+
+
+                                                 36
+Preprint
+
+
+
+
+I     A DDITIONAL E XPERIMENTAL R ESULTS
+
+I.1   T RAINING T IME AND I NFERENCE T IME
+
+Experimental settings. All methods are trained for 100,000 optimizer steps on the same
+1,000 snapshots per system and evaluated on the same ten held-out trajectories us-
+ing a single NVIDIA GeForce RTX 5090 (32 GB) and an AMD Ryzen 9 9950X3D
+CPU. Peak VRAM is the framework-reported maximum live-tensor memory during training
+(torch.cuda.max memory allocated; JAX device-memory peak for CFO), excluding the
+CUDA context and allocator cache. Inference time is averaged over the ten test trajectories after one
+warm-up rollout. Because NT varies substantially across systems, we also report the normalized
+per-step cost.
+
+Results. Table 10 summarizes the measurements. NCL-MCT Solver uses several times fewer
+parameters than F-FNO and over an order of magnitude fewer than CFO, while also requiring less
+training memory and wall-clock time. This reflects the division of labor in NCL-MCT Solver: the
+MCT integrator handles temporal evolution, while the constitutive modules represent only PDE-
+specific responses. Inference cost reflects the number of constitutive evaluations. The per-step
+cost is lowest for nonreactive scalar systems, increases when a reaction module is added, and is
+highest for Schnakenberg, which evaluates two transport operators. NCL-MCT Solver remains faster
+
+
+Table 10: Computational cost of all methods. Params counts trainable parameters; peak VRAM is
+the framework-reported maximum live-tensor memory during training; Train is the wall-clock time
+for 100,000 optimizer steps; Infer is the mean wall-clock time of one NT -step rollout over the ten
+test trajectories; and ms/step is Infer/NT . − denotes unevaluated cases.
+
+System             Method                   NT        Params    VRAM (GiB)   Train (s)        Infer (s)   ms/step
+                   F-FNO                              733,506        8.371    11,117       0.80 ± 0.00      1.34
+                   CFO                              8,095,489        6.970     5,712       4.91 ± 0.01      8.18
+Linear Diffusion   DOOL                     600        64,620        0.082       132       0.45 ± 0.04      0.75
+                   NCL-MCT Solver (Vel.)               97,419        1.061     1,912       1.22 ± 0.00      2.03
+                   NCL-MCT Solver (Law)                97,419        1.049     1,866       1.22 ± 0.00      2.03
+                   F-FNO                              733,506        8.371    11,117      13.15 ± 0.01      1.32
+                   CFO                              8,095,489        6.970     5,716      79.19 ± 0.01      7.92
+CH                 DOOL                    10,000      64,620        0.082       139       6.25 ± 0.01      0.63
+                   NCL-MCT Solver (Vel.)               97,419        1.061     1,920      19.43 ± 0.05      1.94
+                   NCL-MCT Solver (Law)                97,419        1.050     1,872      19.47 ± 0.05      1.95
+                   F-FNO                              733,506        8.371    11,119       2.63 ± 0.00      1.31
+                   CFO                              8,095,489        6.970     5,708      15.92 ± 0.03      7.96
+PM                 DOOL                    2,000       64,620        0.082       150       1.96 ± 0.00      0.98
+                   NCL-MCT Solver (Vel.)               97,419        1.062     1,864       3.98 ± 0.01      1.99
+                   NCL-MCT Solver (Law)                97,419        1.050     1,864       3.96 ± 0.01      1.98
+                   F-FNO                              733,506        8.371    11,118       0.67 ± 0.00      1.33
+                   CFO                              8,095,489        6.970     6,786       4.07 ± 0.01      8.15
+Fisher-KPP                                  500
+                   NCL-MCT Solver (Vel.)               98,572        1.187     2,012       1.25 ± 0.00      2.50
+                   NCL-MCT Solver (Law)                98,572        1.177     2,041       1.25 ± 0.00      2.50
+                   F-FNO                              733,506        8.371    11,146      13.21 ± 0.02      1.32
+                   CFO                              8,095,489        6.970     7,245      79.23 ± 0.02      7.92
+Reactive CH                                10,000
+                   NCL-MCT Solver (Vel.)               98,572        1.187     2,068      28.03 ± 0.05      2.80
+                   NCL-MCT Solver (Law)                98,572        1.177     2,050      28.17 ± 0.02      2.82
+                   F-FNO                              733,506        8.371    11,111       1.35 ± 0.00      1.35
+                   CFO                              8,095,489        6.970     8,281       8.02 ± 0.03      8.02
+Reactive PM                                1,000
+                   NCL-MCT Solver (Vel.)               98,572        1.187     2,028       2.46 ± 0.00      2.46
+                   NCL-MCT Solver (Law)                98,572        1.177     2,032       2.46 ± 0.00      2.46
+                   F-FNO                              733,700        4.244     4,877      26.34 ± 0.04      1.32
+                   CFO                              8,096,130        5.668     6,158     158.41 ± 0.01      7.92
+Schnakenberg                               20,000
+                   NCL-MCT Solver (Vel.)              194,520        0.847     1,656      82.03 ± 0.07      4.10
+                   NCL-MCT Solver (Law)               194,520        0.843     1,618      82.00 ± 0.09      4.10
+
+
+
+                                                      37
+Preprint
+
+
+
+
+than CFO on every system and at most about three times slower than F-FNO, whose inference
+consists only of repeated state-map evaluations. Vel. and Law have nearly identical inference costs
+and similar training costs because they share the same architecture and differ only in supervision.
+DOOL is the least expensive method, but its rollout errors are substantially larger on the evaluated
+systems (Table 1). The transport-only DOOL formulation is evaluated on the three nonreactive
+systems; reactive cases require additional problem-specific Onsager/Rayleighian design. All models
+use batch size 16 for Schnakenberg (Appendix E), explaining the lower training time and memory
+of NCL-MCT Solver and F-FNO there despite their larger multispecies models.
+
+I.2   E VALUATION OF M ASS B EHAVIOR
+
+We evaluate mass behavior on the porous-medium (PM) system to examine the effect of retaining
+explicit mass-compression-transport kinematics while learning PDE-specific constitutive responses.
+
+Experimental settings. Relative mass error is measured against the total mass at the initial time.
+The reference curve reports the corresponding drift of the reference evaluation.
+
+Results. As shown in Figure 24, both NCL-MCT Solver (Vel.) and NCL-MCT Solver (Law) ex-
+hibit smaller relative mass drift than CFO and F-FNO, despite having higher density rollout errors
+than CFO (Table 1). This shows that lower density error does not necessarily imply better preser-
+vation of total mass, while NCL-MCT Solver retains favorable mass behavior over long rollouts.
+This empirical behavior does not imply exact discrete conservation. As discussed in Section 4.2,
+conservative evolution of the compression factor I alone does not guarantee conservation of the
+reconstructed density ρ = M I.
+
+
+
+
+Figure 24: Relative mass error for porous medium, measured against the total mass at the initial
+time. The dashed curve shows the corresponding drift of the reference evaluation.
+
+
+I.3   C OMPARISON WITH HC-PINN
+
+We compare NCL-MCT Solver with HC-PINN (Hao et al., 2026) as two approaches to incorporat-
+ing physical structure: physics-constrained solution learning and constitutive learning with a shared
+MCT integrator. The comparison covers all seven systems spanning generalized diffusion, general-
+ized reaction-diffusion, and multispecies reaction-diffusion.
+
+Experimental settings. HC-PINN fits one network to one initial-value problem, with the initial
+condition embedded in the ansatz. The resulting network represents that trajectory and must be
+retrained when the initial condition changes. NCL-MCT Solver instead learns the constitutive re-
+sponses of each PDE and subsequently integrates different initial conditions using the shared MCT
+integrator. For this comparison, we fit one HC-PINN per system to the first of the ten test initial
+conditions in Appendix E, and retrain NCL-MCT Solver using only data from the same initial-value
+problem. The reported values are therefore single-trajectory errors and differ from the ten-trajectory
+averages in Table 1.
+
+
+                                                 38
+Preprint
+
+
+
+
+Table 11: Single-trajectory comparison with HC-PINN. HC-PINN and both NCL-MCT Solver con-
+figurations are trained and evaluated on the same initial-value problem; the NCL-MCT Solver results
+therefore differ from the ten-trajectory averages in Table 1. Red/orange mark the best/second-best
+result per row.
+
+                                            HC-PINN           NCL-MCT (Vel.)   NCL-MCT (Law)
+           System              Metric    (Hao et al., 2026)       (Ours)           (Ours)
+            (a) Generalized diffusion
+                               Eroll       6.43 × 10−4         2.17 × 10−3      2.23 × 10−3
+           Linear Diffusion
+                               Emax        1.55 × 10−3         3.78 × 10−3      4.18 × 10−3
+                               Eroll       2.44 × 10−1         3.75 × 10−2      6.89 × 10−3
+           CH
+                               Emax        3.02 × 10−1         4.93 × 10−2      1.11 × 10−2
+                               Eroll       1.04 × 10−1         1.37 × 10−2      1.38 × 10−2
+           PM
+                               Emax        1.52 × 10−1         1.76 × 10−2      1.78 × 10−2
+            (b) Generalized reaction-diffusion
+                               Eroll       5.67 × 10−4         1.99 × 10−3      2.09 × 10−3
+           Fisher-KPP
+                               Emax        1.73 × 10−3         2.57 × 10−3      6.41 × 10−3
+                               Eroll       2.56 × 10−1         1.37 × 10−2      1.65 × 10−2
+           Reactive CH
+                               Emax        3.16 × 10−1         2.98 × 10−2      3.50 × 10−2
+                               Eroll       5.14 × 10−2         2.44 × 10−2      1.42 × 10−2
+           Reactive PM
+                               Emax        8.25 × 10−2         3.12 × 10−2      1.79 × 10−2
+            (c) Multispecies reaction-diffusion
+                               Eroll       2.49 × 10−1         3.30 × 10−2      6.39 × 10−2
+           Schnakenberg (U )
+                               Emax        5.03 × 10−1         9.23 × 10−2      1.74 × 10−1
+                               Eroll       8.17 × 10−2         1.01 × 10−2      1.69 × 10−2
+           Schnakenberg (V )
+                               Emax        1.90 × 10−1         3.06 × 10−2      4.82 × 10−2
+
+
+
+We follow the architecture and hard-constraint formulation of Hao et al. (2026): a tanh multilayer
+perceptron with seven hidden layers of width 32, applied to a Fourier-feature embedding of the
+spatial coordinates truncated at 16 modes, so periodicity is enforced structurally through the network
+input rather than a boundary loss. The prediction ρ = ψ + φ ρnn , with ψ = e−Ct ρ0 and φ = 1 −
+e−Ct , satisfies the initial condition exactly, where C > 0 controls the hard-constraint ansatz. Self-
+adaptive weighting is disabled. Each optimizer step evaluates the PDE residual at 104 collocation
+points sampled uniformly from the same space-time domain. Optimization uses 50,000 Adam steps
+with learning rate 10−3 , followed by 25,000 L-BFGS steps with a strong-Wolfe line search. Because
+the source code of Hao et al. (2026) is not publicly available, we reimplemented the method from
+its description. The original configuration uses 5,000 L-BFGS steps after 50,000 Adam steps; we
+extend the L-BFGS phase to 25,000 steps, by which point the loss has plateaued and the resulting
+errors match or improve on the reported values.
+
+Results. On linear diffusion and Fisher-KPP, HC-PINN is more accurate on both metrics, con-
+sistent with the pattern in Section 5.1: when a trajectory-specific model represents the solution ac-
+curately, direct solution learning avoids repeated constitutive evaluation and numerical integration.
+On the remaining five systems, both NCL-MCT Solver configurations achieve lower errors on both
+metrics, by up to 35× on the two fourth-order systems and up to 8.6× on the degenerate-transport
+and multispecies systems, even though HC-PINN is fitted directly to the initial-value problem on
+which it is evaluated. These results support constitutive learning with a shared MCT integrator on
+the more complex systems considered here, although differences in architecture, supervision, and
+optimization prevent attributing the gap to any single design choice.
+
+
+
+
+                                                     39
+Preprint
+
+
+
+
+I.4      A BLATION OF C ONSTITUTIVE PARAMETERIZATION AND S UPERVISION
+
+We compare three transport-learning configurations on Schnakenberg (Table 12): direct velocity
+prediction trained with Ldata
+                         u    + Llaw
+                                   r , and mobility-force prediction under either velocity-data su-
+pervision with curl regularization (Lvel , Vel.) or known-law supervision of ξ and f (Llaw , Law).
+All three use the same reaction loss Llaw
+                                       r , isolating differences in transport parameterization and
+supervision. The errors have comparable magnitude and the same ordering across both metrics and
+species: Law gives the lowest mean errors, followed by Vel. and direct velocity prediction. Both
+mobility-force configurations therefore retain an explicit decomposition into positive mobility and
+thermodynamic driving force while achieving lower mean errors than direct velocity prediction on
+this system. This comparison does not isolate the effects of factorization and curl regularization;
+Appendix I.6 separately examines the effect of λcurl on Fisher-KPP.
+
+Table 12: Ablation of constitutive parameterization and supervision on Schnakenberg. Errors are
+mean ± standard deviation. Red/orange indicate the best/second-best unrounded mean in each col-
+umn.
+
+                                               Schnakenberg (U )                                   Schnakenberg (V )
+Parameterization Objective             Eroll                       Emax                    Eroll                       Emax
+                                                     −2                        −1                        −3
+u, r             Ldata
+                  u    + Llaw
+                          r     (3.40 ± 1.70) × 10        (1.11 ± 0.66) × 10        (7.84 ± 4.27) × 10        (2.96 ± 2.18) × 10−2
+                                                     −2                        −2                        −3
+(ξ, f ), r       Lvel           (2.52 ± 1.77) × 10        (8.28 ± 8.55) × 10        (6.74 ± 3.37) × 10        (2.19 ± 1.93) × 10−2
+                                                     −2                        −2                        −3
+(ξ, f ), r       Llaw           (2.38 ± 1.26) × 10        (7.36 ± 6.15) × 10        (6.57 ± 2.27) × 10        (1.97 ± 1.30) × 10−2
+
+
+
+I.5      A BLATION OF C ONSTITUTIVE M ODULARITY
+
+This experiment examines whether numerically evaluated and learned constitutive responses can
+be combined within the same MCT integrator. Here, Numerical denotes responses computed di-
+rectly from known constitutive laws using the corresponding numerical discretization, while Neural
+denotes responses predicted by trained constitutive modules. We evaluate four transport-reaction
+combinations on Schnakenberg: Numerical-Numerical, Neural-Numerical, Numerical-Neural, and
+Neural-Neural. The Numerical-Numerical configuration serves as the numerical constitutive refer-
+ence within the same MCT integrator.
+
+Experimental settings. All configurations use the same MCT factor evolution, test initial condi-
+tions, 128×128 grid, and 20,000 integration steps to T = 1. Neural constitutive modules are trained
+separately for each configuration under known-law supervision. Thus, this experiment evaluates
+module replacement rather than reuse of identical trained modules across configurations. Errors
+follow the Eroll and Emax definitions in Section 5 and are measured against the reference solution.
+
+Results. Table 13 shows that Numerical-Numerical achieves the lowest errors for both species.
+Among the mixed configurations, Neural-Numerical yields lower rollout errors than Numerical-
+Neural, indicating that replacing the reaction response with a learned approximation introduces the
+larger error in this experiment. The fully learned Neural-Neural configuration achieves mean rollout
+errors of 2.38 × 10−2 for U and 6.57 × 10−3 for V . All four configurations use the same MCT
+integrator, demonstrating that numerically evaluated and learned transport and reaction responses
+can share the same constitutive interface.
+
+I.6      A BLATION OF THE C URL P ENALTY W EIGHT
+
+The curl penalty Lcurl in Equation 7 encourages the predicted driving force to be curl-free, reflecting
+the EnVarA structure f = −∇(δE/δρ) that velocity-data supervision alone does not enforce. We
+examine whether this regularization improves rollout accuracy and its sensitivity to the weight λcurl .
+
+Experimental settings. We vary λcurl ∈ {0, 0.01, 0.1, 1} on Fisher-KPP under velocity-data
+supervision. Setting λcurl = 0 removes the curl penalty, leaving transport supervised only through
+the reconstructed velocity u
+                           b = ξbbf . All other settings are fixed, including the training samples,
+network architecture (Appendix B), optimization settings and random seed (Appendix E), and the
+
+
+                                                              40
+Preprint
+
+
+
+
+Table 13: Ablation of constitutive modularity on Schnakenberg. Numerical denotes constitutive
+responses computed from known laws using numerical discretization; Neural denotes responses
+predicted by trained constitutive modules. Errors are mean ± standard deviation. Red/orange mark
+the best/second-best means for each species. Numerical-Numerical is the numerical constitutive
+reference within the same MCT integrator.
+
+               Transport   Reaction    Species           Eroll                   Emax
+                                   U              (6.57 ± 2.43) × 10−3   (1.634 ± 0.480) × 10−2
+               Numerical Numerical
+                                   V              (2.11 ± 0.80) × 10−3    (6.25 ± 1.95) × 10−3
+                                       U         (1.059 ± 0.259) × 10−2 (2.361 ± 0.412) × 10−2
+               Neural      Numerical
+                                       V          (3.07 ± 0.58) × 10−3   (7.52 ± 1.35) × 10−3
+                                       U         (2.191 ± 1.507) × 10−2 (7.182 ± 6.851) × 10−2
+               Numerical Neural
+                                       V          (6.63 ± 3.40) × 10−3 (2.178 ± 1.809) × 10−2
+                                       U         (2.376 ± 1.263) × 10−2 (7.362 ± 6.152) × 10−2
+               Neural      Neural
+                                       V          (6.57 ± 2.27) × 10−3 (1.971 ± 1.299) × 10−2
+
+
+Table 14: Ablation of the curl-penalty weight λcurl on Fisher-KPP under velocity-data supervision.
+λcurl = 0 removes the penalty. Errors are mean ± standard deviation over ten test trajectories with
+500 rollout steps. Red/orange mark the best/second-best means. λcurl = 0.01 is used throughout the
+paper.
+
+                             λcurl           Eroll                  Emax
+                                                        −3
+                             0        (1.03 ± 0.23) × 10     (1.32 ± 0.36) × 10−3
+                             0.01     (5.01 ± 1.39) × 10−4   (5.96 ± 1.96) × 10−4
+                             0.1      (8.61 ± 1.59) × 10−4   (1.17 ± 0.26) × 10−3
+                             1        (1.13 ± 0.19) × 10−3   (1.72 ± 0.53) × 10−3
+
+
+
+500-step rollout over ten test trajectories (Appendix D.4). The reaction loss Llaw
+                                                                               r   and unit weight on
+Ldata
+ u    are retained in all runs, isolating the effect of λcurl .
+
+Results. Table 14 shows the lowest errors at the intermediate weight λcurl = 0.01, with the same
+ordering on both metrics. Removing the penalty approximately doubles the error relative to λcurl =
+0.01 (2.1× for Eroll and 2.2× for Emax ), indicating that curl regularization provides information not
+enforced by velocity-data supervision alone. Increasing the weight beyond 0.01 reduces this benefit:
+at λcurl = 1, both errors are within one standard deviation of the λcurl = 0 run. This suggests that
+overly strong curl regularization can trade velocity accuracy for force regularity. We therefore use
+λcurl = 0.01 throughout the paper; this setting corresponds to the NCL-MCT Solver (Vel.) result
+for Fisher-KPP in Table 1. This ablation is conducted on a single system, and λcurl is not retuned
+per PDE.
+
+
+
+
+                                                       41
+
