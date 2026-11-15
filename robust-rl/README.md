@@ -1,0 +1,1 @@
+Toy of the R-contamination robust Bellman operator and transformer warm start from Banerjee and Tsukamoto (https://arxiv.org/abs/2609.23775). Install with `pip install -e .` and run `pytest` or `python train.py`. This is a 5x5 maze and a 16-d encoder, not BERT, and it does not claim their 11x11/13x13 rates or finite-sample constants.
