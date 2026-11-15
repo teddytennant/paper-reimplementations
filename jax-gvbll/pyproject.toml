@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gvbll"
+version = "0.1.0"
+description = "Online Bayesian node classification with a GraphSAGE encoder and variational Bayesian last layer (arXiv:2609.13655)"
+requires-python = ">=3.10"
+dependencies = ["jax>=0.4.30", "jaxlib>=0.4.30", "numpy"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
