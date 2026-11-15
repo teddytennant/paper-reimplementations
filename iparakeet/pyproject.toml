@@ -1,0 +1,9 @@
+[project]
+name = "iparakeet"
+version = "0.1.0"
+description = "Integer relative-attention score fusion and a minimax Swish approximation"
+requires-python = ">=3.10"
+dependencies = ["jax"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
