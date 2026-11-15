@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "diffusion-is-attention"
+version = "0.1.0"
+description = "Closed-form attention denoiser from arXiv:2609.00885, in JAX"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = ["jax>=0.4.30"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/diffusion_is_attention"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
