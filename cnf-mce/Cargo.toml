@@ -1,0 +1,5 @@
+[package]
+name = "cnf-mce"
+edition = "2021"
+license = "MIT"
+description = "Counting and Filtering vocabulary construction and Min-Cost Encoding"
