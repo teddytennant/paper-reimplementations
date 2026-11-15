@@ -1,0 +1,18 @@
+[project]
+name = "jax-flf-loss"
+version = "0.1.0"
+description = "Focal Log-Frequency Loss for flow matching, in JAX"
+requires-python = ">=3.10"
+dependencies = [
+    "jax>=0.4",
+    "equinox>=0.11",
+    "optax>=0.2",
+    "numpy>=1.24",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
