@@ -1,0 +1,9 @@
+[package]
+name = "semi-ladder-cds"
+version = "0.1.0"
+edition = "2021"
+description = "Connected dominating set algorithms on semi-ladder-free graphs"
+license = "MIT"
+publish = false
+
+[dependencies]
