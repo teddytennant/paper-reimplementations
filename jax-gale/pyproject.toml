@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jax-gale"
+version = "0.1.0"
+description = "JAX implementation of GaLe global approximate and local exact inference"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Teddy Tennant", email = "teddytennant@icloud.com" }]
+dependencies = ["jax>=0.4", "numpy"]
+
+[tool.setuptools]
+packages = ["gale"]
