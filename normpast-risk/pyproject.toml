@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "normpast-risk"
+version = "0.1.0"
+description = "NormPaST-Risk: segment-level Alzheimer's risk scores for online handwriting trajectories."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "jax",
+    "numpy",
+    "optax",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
