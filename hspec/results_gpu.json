@@ -1,0 +1,16 @@
+{
+  "steps": 30,
+  "seed": 0,
+  "loss_step0": 3.503782272338867,
+  "loss_last": 0.7529842853546143,
+  "target_loss_step0": 3.6423251628875732,
+  "target_loss_last": 0.12361393868923187,
+  "mean_accepted_hybrid": 1.8125,
+  "mean_accepted_no_injection": 0.015625,
+  "d": 32,
+  "vocab": 32,
+  "n_layers": 2,
+  "gamma": 4,
+  "n_heads": 4,
+  "d_head": 8
+}
