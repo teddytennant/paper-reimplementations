@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "budgeted-qrg"
+version = "0.1.0"
+description = "Budgeted quotient-residual guidance kernel (arXiv:2609.31222)"
+readme = "README.md"
+authors = [{ name = "Teddy Tennant", email = "teddytennant@icloud.com" }]
+requires-python = ">=3.10"
+dependencies = [
+    "jax>=0.4.30",
+    "numpy",
+]
+
+[project.optional-dependencies]
+pytest = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
