@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fprll"
+version = "0.1.0"
+description = "Restarted follow-the-perturbed-regularized-lazy-leader with a density-mixture master."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "jax",
+  "numpy",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fprll"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
