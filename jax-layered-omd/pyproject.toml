@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jax-layered-omd"
+version = "0.1.0"
+description = "JAX implementation of layered optimistic mirror descent (arXiv:2609.00504)"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Teddy Tennant", email = "teddytennant@icloud.com" }]
+requires-python = ">=3.10"
+dependencies = ["jax>=0.4.30", "jaxlib>=0.4.30", "numpy>=1.24"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "scipy>=1.10"]
+
+[tool.setuptools.packages.find]
+include = ["layered_omd*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
