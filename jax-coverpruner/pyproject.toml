@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jax-coverpruner"
+version = "0.1.0"
+description = "JAX implementation of CoverPruner, visual token pruning as representational coverage maximization (arXiv:2609.03158)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Teddy Tennant", email = "teddytennant@icloud.com" }]
+dependencies = ["jax>=0.4.30", "numpy>=1.26"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
