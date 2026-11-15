@@ -1,0 +1,10 @@
+[package]
+name = "cyclic_pivot_gray"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Cyclic pivot Gray codes for well-ordered k-degenerate graphs (arXiv 2610.09410)"
+
+[dependencies]
+num-bigint = "0.4"
+num-traits = "0.2"
