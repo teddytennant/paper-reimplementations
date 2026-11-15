@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jax-dwmf"
+version = "0.1.0"
+description = "JAX implementation of diagonally-weighted matrix-function dequantization (arXiv:2609.10729)"
+requires-python = ">=3.10"
+dependencies = ["jax>=0.4.30", "jaxlib>=0.4.30"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+tests = ["pytest"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
