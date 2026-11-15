@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bsca"
+version = "0.1.0"
+description = "Biquaternionic temporal knowledge graph embeddings with complex-valued attention (arXiv:2609.14279)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Teddy Tennant", email = "teddytennant@icloud.com"}]
+dependencies = ["jax>=0.4.30", "numpy", "optax", "pytest>=7"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+tests = ["pytest>=7"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
