@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "refinemix"
+version = "0.1.0"
+description = "RefineMix discrete diffusion (arXiv 2610.12340) as a small JAX library"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["jax", "optax", "numpy"]
+
+[tool.setuptools.packages.find]
+include = ["refinemix*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
