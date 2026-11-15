@@ -1,0 +1,10 @@
+[package]
+name = "recolor-explore"
+version = "0.1.0"
+edition = "2021"
+authors = ["Teddy Tennant <teddytennant@icloud.com>"]
+license = "MIT"
+description = "Three- and four-color recolorable graph exploration (arXiv:2609.14356)"
+publish = false
+
+[dependencies]
