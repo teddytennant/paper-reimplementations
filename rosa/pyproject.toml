@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rosa"
+version = "0.1.0"
+description = "Rotational sparse adaptation for fine-tuning"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "jax",
+    "numpy",
+    "optax",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools.packages.find]
+include = ["rosa*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
