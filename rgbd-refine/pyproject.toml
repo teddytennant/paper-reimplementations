@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rgbd-refine"
+version = "0.1.0"
+description = "RGBD mesh refinement by depth matching, symmetry transfer, and cotangent propagation"
+requires-python = ">=3.11"
+dependencies = [
+    "jax>=0.4",
+    "numpy",
+    "scipy",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
