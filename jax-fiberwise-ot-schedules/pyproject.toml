@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jax-fiberwise-ot-schedules"
+version = "0.1.0"
+description = "JAX fiberwise OT schedules (arXiv:2609.11842)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Teddy Tennant", email = "teddytennant@icloud.com"}]
+dependencies = ["jax", "jaxlib", "numpy"]
+
+[project.optional-dependencies]
+tests = ["pytest"]
+
+[project.urls]
+Paper = "https://arxiv.org/abs/2609.11842"
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+pythonpath = ["src"]
