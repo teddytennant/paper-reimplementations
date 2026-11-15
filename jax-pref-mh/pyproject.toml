@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jax-pref-mh"
+version = "0.1.0"
+description = "Exact Metropolis-Hastings from binary pairwise preference votes"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Teddy Tennant", email = "teddytennant@icloud.com" }]
+requires-python = ">=3.10"
+dependencies = ["jax>=0.4", "numpy>=1.24"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
