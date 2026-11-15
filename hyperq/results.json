@@ -1,0 +1,8 @@
+{
+  "loss_start": 8.742939949035645,
+  "loss_end": 5.997102737426758,
+  "n_qubits": 8,
+  "degree": 4,
+  "branch_params": 2692,
+  "backbone_frozen": true
+}
