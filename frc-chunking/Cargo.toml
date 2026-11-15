@@ -1,0 +1,16 @@
+[package]
+name = "frc-chunking"
+version = "0.1.0"
+edition = "2021"
+description = "Fixed-range chunking and dual-boundary alignment (arXiv:2609.12674)"
+license = "MIT"
+authors = ["Teddy Tennant <teddytennant@icloud.com>"]
+publish = false
+
+[lib]
+name = "frc_chunking"
+path = "src/lib.rs"
+
+[[bin]]
+name = "frc"
+path = "src/bin/frc.rs"
