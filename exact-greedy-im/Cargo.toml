@@ -1,0 +1,10 @@
+[package]
+name = "exact-greedy-im"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Exact greedy Independent Cascade influence maximization on bounded-treewidth graphs"
+authors = ["Teddy Tennant <teddytennant@icloud.com>"]
+publish = false
+
+[dependencies]
