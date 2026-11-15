@@ -1,0 +1,10 @@
+[project]
+name = "entropfill"
+version = "0.1.0"
+description = "Rényi-guided context pruning with a computable deletion envelope (arXiv 2610.09757)"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = ["jax", "numpy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
