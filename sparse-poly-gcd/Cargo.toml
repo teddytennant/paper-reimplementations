@@ -1,0 +1,16 @@
+[package]
+name = "sparse-poly-gcd"
+version = "0.1.0"
+edition = "2021"
+description = "Derivative-aided sparse polynomial GCD over a prime field (arXiv:2609.08074)"
+license = "MIT"
+authors = ["Teddy Tennant <teddytennant@icloud.com>"]
+publish = false
+
+[lib]
+name = "sparse_poly_gcd"
+path = "src/lib.rs"
+
+[[bin]]
+name = "gcd"
+path = "src/bin/gcd.rs"
