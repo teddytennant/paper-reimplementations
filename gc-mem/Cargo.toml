@@ -1,0 +1,10 @@
+[package]
+name = "gc-mem"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "GC-Mem temporal dominance operator Φ_T for mutable RAG (arXiv:2609.16073)"
+authors = ["Teddy Tennant <teddytennant@icloud.com>"]
+publish = false
+
+[dependencies]
