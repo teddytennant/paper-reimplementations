@@ -1,0 +1,12 @@
+[package]
+name = "md_tsp"
+version = "0.1.0"
+edition = "2021"
+description = "A (1+1/√2)-approximation for the Multiple-Depot TSP (arXiv:2609.19537)"
+license = "MIT"
+authors = ["Teddy Tennant <teddytennant@icloud.com>"]
+publish = false
+
+[lib]
+name = "md_tsp"
+path = "src/lib.rs"
