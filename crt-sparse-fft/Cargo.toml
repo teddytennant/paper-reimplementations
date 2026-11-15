@@ -1,0 +1,9 @@
+[package]
+name = "crt-sparse-fft"
+version = "0.1.0"
+edition = "2021"
+description = "Certificate-governed CRT sparse FFT (arXiv:2609.34086)"
+publish = false
+
+[dependencies]
+num-complex = "0.4"
