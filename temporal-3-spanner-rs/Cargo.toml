@@ -1,0 +1,11 @@
+[package]
+name = "temporal_spanner"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Temporal 3-spanners of temporal cliques and bicliques (arXiv:2609.02851)"
+
+[dependencies]
+
+[profile.release]
+debug = false
