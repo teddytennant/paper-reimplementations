@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+.pytest_cache/
+paper.pdf
+PAPER.txt
+*.egg-info/
+dist/
+build/
+.venv
