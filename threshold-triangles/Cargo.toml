@@ -1,0 +1,15 @@
+[package]
+name = "threshold-triangles"
+version = "0.1.0"
+edition = "2021"
+description = "Scalable triangle counting: the threshold algorithm (arXiv:2609.15848)"
+license = "MIT"
+authors = ["Teddy Tennant <teddytennant@icloud.com>"]
+publish = false
+
+[lib]
+name = "threshold_triangles"
+path = "src/lib.rs"
+
+[dependencies]
+rand = "0.8"
