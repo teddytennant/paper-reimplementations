@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jax-backward-kernel-herding"
+version = "0.1.0"
+description = "JAX Backward Kernel Herding and Flexible Kernel Thinning (arXiv:2609.07432)"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Teddy Tennant", email = "teddytennant@icloud.com"}]
+requires-python = ">=3.10"
+dependencies = [
+    "jax",
+    "jaxlib",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
