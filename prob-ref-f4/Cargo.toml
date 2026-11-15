@@ -1,0 +1,19 @@
+[package]
+name = "prob-ref-f4"
+version = "0.1.0"
+edition = "2021"
+description = "Probably correct row echelon form in the F4 algorithm (arXiv:2609.14433)"
+license = "MIT"
+authors = ["Teddy Tennant <teddytennant@icloud.com>"]
+publish = false
+
+[lib]
+name = "prob_ref_f4"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pref"
+path = "src/bin/pref.rs"
+
+[dependencies]
+rand = "0.8"
