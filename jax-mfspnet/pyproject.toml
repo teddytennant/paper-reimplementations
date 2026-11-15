@@ -1,0 +1,21 @@
+[project]
+name = "jax-mfspnet"
+version = "0.1.0"
+description = "JAX implementation of MFSPNet, model-free surrogate PSO search over variable-length dense blocks (arXiv:2609.02460)"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = ["jax>=0.4.30", "optax>=0.2.2", "numpy>=1.26"]
+
+[project.optional-dependencies]
+test = ["pytest>=8", "scipy>=1.11"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["mfspnet*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
