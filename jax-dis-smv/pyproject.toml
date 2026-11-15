@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "jax-dis-smv"
+version = "0.1.0"
+description = "JAX kernel of disintegrated PAC-Bayes self-bounding majority votes (arXiv:2609.16803)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Teddy Tennant", email = "teddytennant@icloud.com"}]
+dependencies = ["jax>=0.11", "numpy"]
+[project.optional-dependencies]
+tests = ["pytest>=7"]
+[tool.setuptools.package-dir]
+"" = "src"
+[tool.setuptools.packages.find]
+where = ["src"]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
