@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jax-smoothed-picard-hmc"
+version = "0.1.0"
+description = "JAX implementation of Smoothed Picard Hamiltonian Monte Carlo (arXiv:2609.06906)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+dependencies = [
+    "jax>=0.4.30",
+    "jaxlib>=0.4.30",
+    "numpy",
+    "pytest",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+tests = ["pytest"]
+
+[project.urls]
+Paper = "https://arxiv.org/abs/2609.06906"
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+pythonpath = ["src"]
