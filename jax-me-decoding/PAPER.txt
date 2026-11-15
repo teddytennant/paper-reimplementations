@@ -1,0 +1,58 @@
+arXiv:2609.18723v1  [cs.AI]  16 Sep 2026
+
+Beyond Truncation: Rethinking LLM Decoding as Ensemble Pruning
+
+Dunyao Xue, Chengshuo Du, Zhengbo Wang, Wenlin Dai, Cheng Meng
+Accepted to EMNLP 2026.
+
+This file records the equations implemented by jax-me-decoding.
+
+Notation
+  z ∈ R^V          logits
+  E ∈ R^{V×d}      token embeddings
+  λ ∈ (0, 1)       early-stop parameter (default 0.9, Appendix B)
+  T                temperature
+  N                candidate-pool size (default 512)
+
+Softmax
+  p ← softmax(z / T)
+
+Candidate pool C
+  C = top-N tokens by p (all tokens if V < N). Subsequent quantities
+  are restricted to C: p_C, E_C.
+
+Adaptive bandwidth
+  ε_t = median_{i < j, i,j ∈ C} ||e_i - e_j||_2
+  If all embeddings are identical, ε_t = 0.
+
+RBF kernel
+  K_ij = exp( - ||e_i - e_j||^2 / (2 ε_t^2) )    for i, j ∈ C
+  When ε_t = 0, K_ij = 1 (all-ones matrix).
+
+Mahalanobis-Ensemble Energy (objective)
+  F(S) = p_S^T K_{S,S}^{-1} p_S
+       = ||L^{-1} p_S||^2     where K_{S,S} = L L^T (Cholesky)
+
+First token
+  j0 = argmax_{j ∈ C} p_j^2 / K_jj
+  S ← {j0}
+
+Rank-1 Cholesky update (paper)
+  Let K_{S∪j, S∪j} be the bordered kernel block, k = K_{S,j}.
+  L_{t+1,t+1} = sqrt( K_jj - ||L^{-1} k||^2 )
+  F(S ∪ {j}) = F(S) + (p_j - ⟨L^{-1} p_S, L^{-1} k⟩)^2 / L_{t+1,t+1}^2
+
+Greedy selection
+  While |S| < |C|:
+    j* = argmax_{j ∈ C \ S} F(S ∪ {j})
+    Early stop if
+      (F(S ∪ {j*}) - F(S)) / F(S)  <  λ (1 - A_S)
+    where
+      A_S = ||p_S||_2^2 / ||p_C||_2^2
+    If F(S) = 0, do not divide by zero.
+    Else S ← S ∪ {j*}
+
+Output
+  Truncated logits: original z on S, -∞ outside S.
+  Sample from softmax of the truncated logits (equivalently,
+  renormalise p on S).
