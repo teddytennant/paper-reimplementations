@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ic-tester"
+version = "0.1.0"
+description = "Query-access testers for coordinate-wise monotonicity and DSIC of single-parameter allocation mechanisms (arXiv:2609.17406)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Teddy Tennant", email = "teddytennant@icloud.com"}]
+dependencies = ["numpy"]
+
+[project.optional-dependencies]
+tests = ["pytest>=7"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
