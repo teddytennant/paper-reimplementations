@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tauleap-schedule"
+version = "0.1.0"
+description = "Schedule optimization for tau-leaping in masked discrete diffusion (arXiv:2609.21960)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Teddy Tennant", email = "teddytennant@icloud.com"},
+]
+dependencies = [
+    "jax>=0.11",
+    "numpy",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
