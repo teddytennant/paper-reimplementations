@@ -1,0 +1,16 @@
+[package]
+name = "ep-realizability"
+version = "0.1.0"
+edition = "2021"
+description = "Equitable Partition realizability via Havel–Hakimi and Gale–Ryser (arXiv:2609.16762)"
+license = "MIT"
+authors = ["Teddy Tennant <teddytennant@icloud.com>"]
+publish = false
+
+[lib]
+name = "ep_realizability"
+path = "src/lib.rs"
+
+[[bin]]
+name = "realize"
+path = "src/bin/realize.rs"
