@@ -1,0 +1,22 @@
+arXiv:2609.23812v1 [cs.LG] 20 Sep 2026
+Iterative Atom Refinement: A Monotonicity Principle for Dictionary Learning
+Alexander Christie, Miguel Moscoso, Alexei Novikov, George Papanicolaou, Chrysoula Tsogka
+
+This package implements one-atom Iterative Atom Refinement from the paper, not from any other code.
+
+Data. Columns of Y (N by M) are samples y_i = A x_i. A is N by K with A^T A = I in the analysis model. Codes x_i are s-sparse. The full combinatorial code matrix has M = C(K, s) columns, each binary s-sparse vector once. The paper takes L = M / K, assumed an integer.
+
+One-atom update (paper equations (2.1) and (2.2)). From a unit vector d^{(r)},
+    scores_i = <d^{(r)}, y_i>
+    chi^{(r)} = indicator of the L largest scores
+    d^{(r+1)} = Y chi^{(r)} / ||Y chi^{(r)}||_2
+The threshold form <d, y> >= alpha_r with alpha_r the L-th largest score agrees with top-L when there is no tie. Ties are broken by a stable ascending argsort (numpy mergesort): keep the last L indices, so the larger column index wins an equal score. The count is then exactly L.
+
+Atom-selection frequency (paper (3.3) and (5.1)). Given the selected index set S and the code matrix X (K by M),
+    p_k = (1/L) * |{i in S : k in supp(x_i)}|
+
+Monotonicity (Section 3.1, display (3.2)). If the coefficients of d^{(0)} in the dictionary basis are strictly ordered, the selection frequencies and the coefficients of d^{(1)} preserve that order on the full combinatorial model with A orthogonal.
+
+Multi-restart recovery. Independent uniform-on-the-sphere inits, three refinement steps each, then greedy deduplication: keep an estimate when its maximum absolute inner product with already-kept estimates is strictly below 0.5.
+
+Not in this package: the K=300 full-combinatorial figure, MOD and greedy-MOD benchmarks, non-orthogonal large-scale tables, whitening, and the coupon-collector coverage experiment.
